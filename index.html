@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          var origDefineProperty = Object.defineProperty;
+          function ensureWritableFetch(target) {
+            if (!target) return;
+            try {
+              var desc = Object.getOwnPropertyDescriptor(target, 'fetch');
+              if (desc && desc.get && !desc.set && desc.configurable !== false) {
+                var currentGetter = desc.get;
+                var customFetch = null;
+                origDefineProperty.call(Object, target, 'fetch', {
+                  configurable: true,
+                  enumerable: desc.enumerable !== false,
+                  get: function () {
+                    return customFetch || currentGetter.call(this);
+                  },
+                  set: function (fn) {
+                    if (typeof fn === 'function') {
+                      customFetch = fn;
+                    }
+                  },
+                });
+              }
+            } catch (_) {}
+          }
+
+          ensureWritableFetch(window);
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            ensureWritableFetch(Window.prototype);
+          }
+
+          Object.defineProperty = function (obj, prop, descriptor) {
+            if (
+              (obj === window || (typeof Window !== 'undefined' && obj === Window.prototype)) &&
+              prop === 'fetch' &&
+              descriptor &&
+              descriptor.get &&
+              !descriptor.set
+            ) {
+              var origGet = descriptor.get;
+              var overrideFn = null;
+              return origDefineProperty.call(Object, obj, prop, {
+                configurable: true,
+                enumerable: descriptor.enumerable !== false,
+                get: function () {
+                  return overrideFn || origGet.call(this);
+                },
+                set: function (fn) {
+                  if (typeof fn === 'function') {
+                    overrideFn = fn;
+                  }
+                },
+              });
+            }
+            return origDefineProperty.call(Object, obj, prop, descriptor);
+          };
+
+          window.addEventListener(
+            'error',
+            function (e) {
+              var msg = String((e && e.message) || '');
+              var file = String((e && e.filename) || '');
+              if (
+                msg.indexOf('Cannot set property fetch') !== -1 ||
+                file.indexOf('chrome-extension://') !== -1 ||
+                file.indexOf('moz-extension://') !== -1
+              ) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                return false;
+              }
+            },
+            true
+          );
+
+          window.addEventListener(
+            'unhandledrejection',
+            function (e) {
+              var reasonStr = String(
+                (e && e.reason && (e.reason.stack || e.reason.message || e.reason)) || ''
+              );
+              if (
+                reasonStr.indexOf('Cannot set property fetch') !== -1 ||
+                reasonStr.indexOf('chrome-extension://') !== -1
+              ) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                return false;
+              }
+            },
+            true
+          );
+        } catch (_) {}
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0B0B0D" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MITO" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>MITO — Legjenda · Histori · Lojëra</title>
+    <meta name="description" content="Platforma shqiptare e transmetimit kulturor, legjendave, historisë, dokumentarëve, MITO Shorts dhe lojërave interaktive." />
+    <meta property="og:title" content="MITO — Legjenda · Histori · Lojëra" />
+    <meta property="og:description" content="Platforma shqiptare e transmetimit kulturor, legjendave, historisë, dokumentarëve, MITO Shorts dhe lojërave interaktive." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#0B0B0D] text-[#F4F0E8] antialiased selection:bg-[#C8A66A]/30">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

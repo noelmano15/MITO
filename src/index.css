@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --mito-black: #0B0B0D;
+    --mito-burgundy: #641C2B;
+    --mito-burgundy-light: #822438;
+    --mito-gold: #C8A66A;
+    --mito-gold-light: #DEC089;
+    --mito-ivory: #F4F0E8;
+    --mito-graphite: #202024;
+    --mito-surface: #141418;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    min-height: 100dvh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #0B0B0D;
+    color: #F4F0E8;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-serif-heritage {
+    font-family: 'Cinzel', Georgia, serif;
+    text-wrap: balance;
+  }
+
+  .font-mono-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* iPhone 17 / Dynamic Island & Home Indicator Safe-Area Helpers */
+.safe-top-header {
+  padding-top: max(env(safe-area-inset-top, 0px), 10px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-top-offset {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+}
+
+.safe-bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-main-content {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem);
+}
+
+@media (min-width: 768px) {
+  .safe-main-content {
+    padding-bottom: 3rem;
+  }
+}
+
+/* Hide scrollbars on horizontal filter pill rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Subtle Albanian traditional geometric motif border */
+.heritage-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(200, 166, 106, 0.25) 20%,
+    rgba(200, 166, 106, 0.65) 50%,
+    rgba(200, 166, 106, 0.25) 80%,
+    transparent 100%
+  );
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0B0D;
+}
+::-webkit-scrollbar-thumb {
+  background: #2C2C32;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C8A66A;
+}
+
+/* Hide native iOS Safari / WebKit play button overlays on intro & inline videos */
+.mito-intro-video::-webkit-media-controls,
+.mito-intro-video::-webkit-media-controls-panel,
+.mito-intro-video::-webkit-media-controls-play-button,
+.mito-intro-video::-webkit-media-controls-start-playback-button,
+.mito-intro-video::-webkit-media-controls-overlay-play-button,
+.mito-intro-video::-webkit-media-controls-enclosure,
+video::-webkit-media-controls-start-playback-button,
+video::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}

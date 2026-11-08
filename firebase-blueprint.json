@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "PublicContent": {
+      "title": "PublicContent",
+      "description": "Published cultural heritage video content (both MITO Shorts 9:16 and Standard Streaming 16:9)",
+      "type": "object",
+      "properties": {
+        "contentId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "slug": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "synopsis": { "type": "string", "maxLength": 600 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "type": { "type": "string", "enum": ["legend", "history", "documentary", "folklore", "mythology", "tradition", "series", "episode", "collection"] },
+        "videoFormat": { "type": "string", "enum": ["short", "standard"] },
+        "videoContainer": { "type": "string", "enum": ["mp4"] },
+        "aspectRatio": { "type": "number" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "durationSeconds": { "type": "integer" },
+        "resolution": { "type": "string", "maxLength": 32 },
+        "codec": { "type": "string", "maxLength": 64 },
+        "audioCodec": { "type": "string", "maxLength": 64 },
+        "fileSizeBytes": { "type": "integer" },
+        "storagePath": { "type": "string", "maxLength": 500 },
+        "thumbnailUrl": { "type": "string", "maxLength": 500 },
+        "posterUrl": { "type": "string", "maxLength": 500 },
+        "heroUrl": { "type": "string", "maxLength": 500 },
+        "playbackUrl": { "type": "string", "maxLength": 500 },
+        "processingStatus": { "type": "string", "enum": ["pending", "uploading", "uploaded", "processing", "ready", "failed", "archived"] },
+        "uploadStatus": { "type": "string", "enum": ["pending", "uploading", "uploaded", "ready", "failed"] },
+        "publicationStatus": { "type": "string", "enum": ["draft", "published", "archived"] },
+        "linkedContentId": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contentId", "title", "type", "videoFormat", "videoContainer", "publicationStatus", "authorUid", "createdAt", "updatedAt"]
+    },
+    "UserProgress": {
+      "title": "UserProgress",
+      "description": "User playback progress and Watch-to-Unlock verification state",
+      "type": "object",
+      "properties": {
+        "progressId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contentId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "watchedSeconds": { "type": "integer" },
+        "completionPercent": { "type": "number" },
+        "unlockedGame": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["progressId", "userId", "contentId", "watchedSeconds", "completionPercent", "unlockedGame", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator lookup document",
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["super_admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["adminId", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/content/{contentId}": {
+      "schema": { "$ref": "#/entities/PublicContent" },
+      "description": "Cultural heritage videos (Shorts 9:16 and Standard 16:9)"
+    },
+    "/playbackProgress/{progressId}": {
+      "schema": { "$ref": "#/entities/UserProgress" },
+      "description": "Per-user playback progress records"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Single Super Admin registry"
+    }
+  }
+}

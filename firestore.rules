@@ -1,0 +1,173 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'noelmano963@gmail.com'
+      );
+    }
+
+    // Validation Blueprint: PublicContent
+    function isValidPublicContent(data) {
+      return data.keys().hasAll([
+        'contentId', 'title', 'type', 'videoFormat', 'videoContainer',
+        'publicationStatus', 'authorUid', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'contentId', 'title', 'slug', 'synopsis', 'description', 'type',
+        'videoFormat', 'videoContainer', 'aspectRatio', 'width', 'height',
+        'durationSeconds', 'resolution', 'codec', 'audioCodec', 'fileSizeBytes',
+        'storagePath', 'thumbnailUrl', 'posterUrl', 'heroUrl', 'playbackUrl',
+        'processingStatus', 'uploadStatus', 'publicationStatus', 'linkedContentId',
+        'authorUid', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.contentId) &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+      (!('slug' in data) || (data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 200)) &&
+      (!('synopsis' in data) || (data.synopsis is string && data.synopsis.size() <= 600)) &&
+      (!('description' in data) || (data.description is string && data.description.size() <= 5000)) &&
+      data.type is string && data.type in ['legend', 'history', 'documentary', 'folklore', 'mythology', 'tradition', 'series', 'episode', 'collection'] &&
+      data.videoFormat is string && data.videoFormat in ['short', 'standard'] &&
+      data.videoContainer is string && data.videoContainer == 'mp4' &&
+      (!('aspectRatio' in data) || (data.aspectRatio is number && data.aspectRatio > 0 && data.aspectRatio <= 10)) &&
+      (!('width' in data) || (data.width is int && data.width >= 1 && data.width <= 10000)) &&
+      (!('height' in data) || (data.height is int && data.height >= 1 && data.height <= 10000)) &&
+      (!('durationSeconds' in data) || (data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 86400)) &&
+      (!('resolution' in data) || (data.resolution is string && data.resolution.size() <= 32)) &&
+      (!('codec' in data) || (data.codec is string && data.codec.size() <= 64)) &&
+      (!('audioCodec' in data) || (data.audioCodec is string && data.audioCodec.size() <= 64)) &&
+      (!('fileSizeBytes' in data) || (data.fileSizeBytes is int && data.fileSizeBytes >= 0 && data.fileSizeBytes <= 10737418240)) &&
+      (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 500)) &&
+      (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 500)) &&
+      (!('posterUrl' in data) || (data.posterUrl is string && data.posterUrl.size() <= 500)) &&
+      (!('heroUrl' in data) || (data.heroUrl is string && data.heroUrl.size() <= 500)) &&
+      (!('playbackUrl' in data) || (data.playbackUrl is string && data.playbackUrl.size() <= 500)) &&
+      (!('processingStatus' in data) || (data.processingStatus is string && data.processingStatus in ['pending', 'uploading', 'uploaded', 'processing', 'ready', 'failed', 'archived'])) &&
+      (!('uploadStatus' in data) || (data.uploadStatus is string && data.uploadStatus in ['pending', 'uploading', 'uploaded', 'ready', 'failed'])) &&
+      data.publicationStatus is string && data.publicationStatus in ['draft', 'published', 'archived'] &&
+      (!('linkedContentId' in data) || isValidId(data.linkedContentId)) &&
+      isValidId(data.authorUid) &&
+      data.authorUid == request.auth.uid &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: UserProgress
+    function isValidUserProgress(data) {
+      return data.keys().hasAll([
+        'progressId', 'userId', 'contentId', 'watchedSeconds',
+        'completionPercent', 'unlockedGame', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'progressId', 'userId', 'contentId', 'watchedSeconds',
+        'completionPercent', 'unlockedGame', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.progressId) &&
+      isValidId(data.userId) &&
+      data.userId == request.auth.uid &&
+      isValidId(data.contentId) &&
+      data.watchedSeconds is int && data.watchedSeconds >= 0 && data.watchedSeconds <= 86400 &&
+      data.completionPercent is number && data.completionPercent >= 0 && data.completionPercent <= 100 &&
+      data.unlockedGame is bool &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Collection: /admins/{adminId}
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    // Collection: /content/{contentId}
+    match /content/{contentId} {
+      allow get: if isSignedIn() && isValidId(contentId) && (
+        existing().publicationStatus == 'published' || isAdmin()
+      );
+      allow list: if isSignedIn() && existing().publicationStatus == 'published';
+      allow create: if isSignedIn() && isValidId(contentId) && isValidPublicContent(incoming()) &&
+        incoming().contentId == contentId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(contentId) && isValidPublicContent(incoming()) &&
+        incoming().contentId == existing().contentId &&
+        incoming().authorUid == existing().authorUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().publicationStatus != 'archived' || isAdmin()) &&
+        isAdmin() && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'slug', 'synopsis', 'description', 'type', 'videoFormat',
+            'aspectRatio', 'width', 'height', 'durationSeconds', 'resolution',
+            'codec', 'audioCodec', 'fileSizeBytes', 'storagePath', 'thumbnailUrl',
+            'posterUrl', 'heroUrl', 'playbackUrl', 'processingStatus',
+            'uploadStatus', 'publicationStatus', 'linkedContentId', 'updatedAt'
+          ])
+        );
+      allow delete: if isSignedIn() && isValidId(contentId) && isAdmin();
+    }
+
+    // Collection: /playbackProgress/{progressId}
+    match /playbackProgress/{progressId} {
+      allow get: if isSignedIn() && isValidId(progressId) && (
+        existing().userId == request.auth.uid || isAdmin()
+      );
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(progressId) && isValidUserProgress(incoming()) &&
+        incoming().progressId == progressId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/content/$(incoming().contentId));
+      allow update: if isSignedIn() && isValidId(progressId) && isValidUserProgress(incoming()) &&
+        incoming().progressId == existing().progressId &&
+        incoming().userId == existing().userId &&
+        incoming().contentId == existing().contentId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            existing().userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'watchedSeconds', 'completionPercent', 'unlockedGame', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isSignedIn() && isValidId(progressId) && isAdmin();
+    }
+
+    // Collection: /mitoSystemState/{docId}
+    match /mitoSystemState/{docId} {
+      allow get, list: if isValidId(docId);
+      allow create, update: if isValidId(docId) &&
+        incoming().keys().hasAll(['payloadJson', 'updatedAt']) &&
+        incoming().payloadJson is string &&
+        incoming().payloadJson.size() <= 950000 &&
+        incoming().updatedAt is string &&
+        incoming().updatedAt.size() <= 64;
+      allow delete: if false;
+    }
+  }
+}
