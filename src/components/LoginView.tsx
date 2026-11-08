@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { formatAccessCodeInput } from '../utils/accessCode';
-import { apiFetch } from '../utils/sessionToken';
+import { apiFetch, setPersistedAccessCode, setCachedUser } from '../utils/sessionToken';
 import type { UserAccount } from '../types/mito';
 
 interface LoginViewProps {
@@ -50,16 +50,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setLoading(true);
     setErrorSq(null);
     try {
+      const formattedCode = `${digitsOnly.slice(0, 3)}-${digitsOnly.slice(3, 6)}-${digitsOnly.slice(6, 9)}`;
       const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: targetCode }),
+        body: JSON.stringify({ code: formattedCode }),
       });
       const data = await res.json();
       if (!res.ok) {
         setErrorSq(data.error || 'Kodi i aksesit nuk është i saktë.');
         setLoading(false);
         return;
+      }
+      setPersistedAccessCode(formattedCode);
+      if (data.user) {
+        setCachedUser(data.user);
       }
       onLoginSuccess(data.user, data.redirectTo || '/home');
     } catch {

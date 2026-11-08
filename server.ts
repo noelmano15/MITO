@@ -119,6 +119,9 @@ function verifySignedToken(signed: string | undefined): string | null {
   }
 }
 
+const SERVER_BOOT_BUILD_ID = `mito_build_${Date.now()}`;
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
 function extractRawTokenFromRequest(req: Request): string | undefined {
   const headerMito = req.headers['x-mito-session'];
   if (typeof headerMito === 'string' && headerMito.trim().length > 0) {
@@ -132,11 +135,32 @@ function extractRawTokenFromRequest(req: Request): string | undefined {
   if (typeof req.query?.token === 'string' && req.query.token.trim().length > 0) {
     return req.query.token.trim();
   }
-  const rawCookie = req.cookies?.[COOKIE_NAME];
+  const rawCookie = req.cookies?.[COOKIE_NAME] || req.cookies?.mito_client_token;
   if (typeof rawCookie === 'string' && rawCookie.trim().length > 0) {
     return rawCookie.trim();
   }
   return undefined;
+}
+
+function buildSignedSessionToken(sessionId: string, userId: string, deviceId: string): string {
+  return signToken(`${sessionId}|${userId}|${deviceId}`);
+}
+
+function parseVerifiedSessionToken(rawToken: string | undefined): {
+  sessionId: string;
+  tokenUserId?: string;
+  tokenDeviceId?: string;
+} | null {
+  const verifiedPayload = verifySignedToken(rawToken);
+  if (!verifiedPayload) return null;
+  const parts = verifiedPayload.split('|');
+  const sessionId = (parts[0] || '').trim();
+  if (!sessionId) return null;
+  return {
+    sessionId,
+    tokenUserId: parts[1] ? parts[1].trim() : undefined,
+    tokenDeviceId: parts[2] ? parts[2].trim() : undefined,
+  };
 }
 
 function ensureSuperAdminAccount(displayName = 'Super Admin MITO'): UserAccount {
@@ -285,45 +309,59 @@ function createSessionForUser(req: Request, res: Response, user: UserAccount): s
   const db = store.getState();
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
-  const sessionDurationMin = user.accessPolicy.maxSessionDurationMinutes || 1440; // 24h
-  const sessionExpiresMs = nowMs + sessionDurationMin * 60_000;
-  const sessionId = `sess_${crypto.randomBytes(16).toString('hex')}`;
+  const sessionExpiresMs = nowMs + ONE_YEAR_MS;
   const ua = String(req.headers['user-agent'] || 'unknown').slice(0, 200);
   const deviceId = extractDeviceIdFromRequest(req);
   const deviceLabel = parseDeviceLabel(ua);
 
-  db.activeSessions.push({
-    sessionId,
-    userId: user.uid,
-    deviceId,
-    deviceLabel,
-    userAgent: ua,
-    ipAddress: req.ip || 'unknown',
-    createdAt: nowIso,
-    expiresAt: new Date(sessionExpiresMs).toISOString(),
-    lastSeenAt: nowIso,
-    revoked: false,
-    activityLog: [
-      {
-        id: `dact_${nowMs}`,
-        type: 'login',
-        title: 'Hyrje në llogari',
-        detail: deviceLabel,
-        timestamp: nowIso,
-        timeOfDay: formatTimeOfDaySq(nowIso),
-      },
-    ],
-  });
+  // Reuse an existing non-revoked session for the same user + deviceId if present
+  const existingSession = db.activeSessions.find(
+    (s) => s.userId === user.uid && s.deviceId === deviceId && !s.revoked
+  );
+
+  let sessionId: string;
+  if (existingSession) {
+    sessionId = existingSession.sessionId;
+    existingSession.lastSeenAt = nowIso;
+    existingSession.expiresAt = new Date(sessionExpiresMs).toISOString();
+    existingSession.deviceLabel = deviceLabel;
+    existingSession.userAgent = ua;
+    existingSession.ipAddress = req.ip || existingSession.ipAddress || 'unknown';
+  } else {
+    sessionId = `sess_${crypto.randomBytes(16).toString('hex')}`;
+    db.activeSessions.push({
+      sessionId,
+      userId: user.uid,
+      deviceId,
+      deviceLabel,
+      userAgent: ua,
+      ipAddress: req.ip || 'unknown',
+      createdAt: nowIso,
+      expiresAt: new Date(sessionExpiresMs).toISOString(),
+      lastSeenAt: nowIso,
+      revoked: false,
+      activityLog: [
+        {
+          id: `dact_${nowMs}`,
+          type: 'login',
+          title: 'Hyrje në llogari',
+          detail: deviceLabel,
+          timestamp: nowIso,
+          timeOfDay: formatTimeOfDaySq(nowIso),
+        },
+      ],
+    });
+  }
   store.commit();
 
-  const signedToken = signToken(sessionId);
+  const signedToken = buildSignedSessionToken(sessionId, user.uid, deviceId);
   const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
 
   res.cookie(COOKIE_NAME, signedToken, {
     httpOnly: true,
     secure: isHttps,
     sameSite: isHttps ? 'none' : 'lax',
-    maxAge: sessionDurationMin * 60_000,
+    maxAge: ONE_YEAR_MS,
     path: '/',
   });
 
@@ -390,42 +428,203 @@ function syncLeaderboardForUser(user: UserAccount) {
 interface AuthenticatedRequest extends Request {
   user?: UserAccount;
   sessionId?: string;
+  explicitlyRevoked?: boolean;
 }
 
 function resolveUserFromRequest(req: AuthenticatedRequest): UserAccount | null {
   const db = store.getState();
   const rawToken = extractRawTokenFromRequest(req);
-  const sessionId = verifySignedToken(rawToken);
+  const parsedToken = parseVerifiedSessionToken(rawToken);
+  const reqDeviceId = extractDeviceIdFromRequest(req);
+  const deletedSet = new Set(db.deletedIds || []);
 
-  if (sessionId) {
-    const session = db.activeSessions.find((s) => s.sessionId === sessionId && !s.revoked);
-    if (session && new Date(session.expiresAt).getTime() > Date.now()) {
-      const user = db.users.find((u) => u.uid === session.userId);
+  const headerUidRaw = req.headers['x-mito-user-uid'] || req.cookies?.mito_client_uid;
+  const headerUid = typeof headerUidRaw === 'string' && headerUidRaw.trim() ? headerUidRaw.trim() : undefined;
+
+  const headerCodeRaw = req.headers['x-mito-saved-code'] || req.cookies?.mito_client_code;
+  const headerCodeDigits =
+    typeof headerCodeRaw === 'string' && headerCodeRaw.trim()
+      ? normalizeAccessCode(headerCodeRaw.trim())
+      : null;
+
+  // 1. If we have a cryptographically verified session token
+  if (parsedToken) {
+    const { sessionId, tokenUserId, tokenDeviceId } = parsedToken;
+    const effectiveDeviceId = tokenDeviceId || reqDeviceId;
+
+    // Was this session explicitly kicked/revoked by Admin, MITO, or user logout?
+    if (deletedSet.has(sessionId)) {
+      req.explicitlyRevoked = true;
+      return null;
+    }
+
+    const existingRecord = db.activeSessions.find((s) => s.sessionId === sessionId);
+    if (existingRecord && existingRecord.revoked) {
+      req.explicitlyRevoked = true;
+      return null;
+    }
+
+    if (existingRecord && !existingRecord.revoked) {
+      const user = db.users.find((u) => u.uid === existingRecord.userId);
       if (user) {
-        const reqDeviceId = extractDeviceIdFromRequest(req);
-        if (!session.deviceId) {
-          session.deviceId = reqDeviceId;
-        }
-        if (!session.deviceLabel) {
-          session.deviceLabel = parseDeviceLabel(session.userAgent || String(req.headers['user-agent'] || ''));
-        }
-        if (!Array.isArray(session.activityLog)) {
-          session.activityLog = [];
-        }
-        // Check if this device has been banned by the Super Admin
-        if (
-          user.role !== 'super_admin' &&
-          (isDeviceBannedForUser(session.deviceId, user.uid) ||
-            isDeviceBannedForUser(reqDeviceId, user.uid))
-        ) {
-          session.revoked = true;
-          store.commit();
+        if (user.status === 'suspended' || user.status === 'revoked') {
+          req.explicitlyRevoked = true;
           return null;
         }
-        session.lastSeenAt = new Date().toISOString();
+        if (
+          user.role !== 'super_admin' &&
+          (isDeviceBannedForUser(existingRecord.deviceId || effectiveDeviceId, user.uid) ||
+            isDeviceBannedForUser(reqDeviceId, user.uid))
+        ) {
+          existingRecord.revoked = true;
+          store.markDeleted(existingRecord.sessionId);
+          store.commit();
+          req.explicitlyRevoked = true;
+          return null;
+        }
+        if (!existingRecord.deviceId) existingRecord.deviceId = reqDeviceId;
+        if (!existingRecord.deviceLabel) {
+          existingRecord.deviceLabel = parseDeviceLabel(
+            existingRecord.userAgent || String(req.headers['user-agent'] || '')
+          );
+        }
+        if (!Array.isArray(existingRecord.activityLog)) {
+          existingRecord.activityLog = [];
+        }
+        const nowMs = Date.now();
+        existingRecord.lastSeenAt = new Date(nowMs).toISOString();
+        existingRecord.expiresAt = new Date(nowMs + ONE_YEAR_MS).toISOString();
         req.user = user;
         req.sessionId = sessionId;
         return user;
+      }
+    }
+
+    // Self-Heal: Validly signed token whose session record was not yet in db.activeSessions after an app update/restart
+    const candidateUid = tokenUserId || headerUid;
+    let candidateUser = candidateUid ? db.users.find((u) => u.uid === candidateUid) : undefined;
+    if (!candidateUser && headerCodeDigits) {
+      candidateUser = db.users.find(
+        (u) => u.fullCode && normalizeAccessCode(u.fullCode) === headerCodeDigits
+      );
+    }
+
+    if (candidateUser && candidateUser.status !== 'suspended' && candidateUser.status !== 'revoked') {
+      if (
+        candidateUser.role !== 'super_admin' &&
+        (isDeviceBannedForUser(effectiveDeviceId, candidateUser.uid) ||
+          isDeviceBannedForUser(reqDeviceId, candidateUser.uid))
+      ) {
+        req.explicitlyRevoked = true;
+        return null;
+      }
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+      const ua = String(req.headers['user-agent'] || 'unknown').slice(0, 200);
+      const deviceLabel = parseDeviceLabel(ua);
+      db.activeSessions.push({
+        sessionId,
+        userId: candidateUser.uid,
+        deviceId: reqDeviceId,
+        deviceLabel,
+        userAgent: ua,
+        ipAddress: req.ip || 'unknown',
+        createdAt: nowIso,
+        expiresAt: new Date(nowMs + ONE_YEAR_MS).toISOString(),
+        lastSeenAt: nowIso,
+        revoked: false,
+        activityLog: [
+          {
+            id: `dact_${nowMs}`,
+            type: 'login',
+            title: 'Sesion i vazhduar automatikisht',
+            detail: deviceLabel,
+            timestamp: nowIso,
+            timeOfDay: formatTimeOfDaySq(nowIso),
+          },
+        ],
+      });
+      store.commit();
+      req.user = candidateUser;
+      req.sessionId = sessionId;
+      return candidateUser;
+    }
+  }
+
+  // 2. Fallback self-heal via matching active device session or saved code header (when not explicitly revoked/banned)
+  if (headerUid || headerCodeDigits) {
+    let matchedUser = headerUid ? db.users.find((u) => u.uid === headerUid) : undefined;
+    if (!matchedUser && headerCodeDigits) {
+      matchedUser = db.users.find(
+        (u) => u.fullCode && normalizeAccessCode(u.fullCode) === headerCodeDigits
+      );
+    }
+
+    if (matchedUser && matchedUser.status !== 'suspended' && matchedUser.status !== 'revoked') {
+      if (
+        matchedUser.role !== 'super_admin' &&
+        isDeviceBannedForUser(reqDeviceId, matchedUser.uid)
+      ) {
+        req.explicitlyRevoked = true;
+        return null;
+      }
+
+      // Check if this device was explicitly kicked for this user
+      const deviceSessions = db.activeSessions.filter(
+        (s) => s.userId === matchedUser!.uid && s.deviceId === reqDeviceId
+      );
+      const activeDeviceSession = deviceSessions.find((s) => !s.revoked && !deletedSet.has(s.sessionId));
+      const wasExplicitlyKicked =
+        deviceSessions.length > 0 &&
+        !activeDeviceSession &&
+        deviceSessions.every((s) => s.revoked || deletedSet.has(s.sessionId));
+
+      if (wasExplicitlyKicked) {
+        req.explicitlyRevoked = true;
+        return null;
+      }
+
+      if (activeDeviceSession) {
+        const nowMs = Date.now();
+        activeDeviceSession.lastSeenAt = new Date(nowMs).toISOString();
+        activeDeviceSession.expiresAt = new Date(nowMs + ONE_YEAR_MS).toISOString();
+        req.user = matchedUser;
+        req.sessionId = activeDeviceSession.sessionId;
+        return matchedUser;
+      }
+
+      if (headerCodeDigits) {
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+        const ua = String(req.headers['user-agent'] || 'unknown').slice(0, 200);
+        const deviceLabel = parseDeviceLabel(ua);
+        const newSessionId = `sess_${crypto.randomBytes(16).toString('hex')}`;
+        db.activeSessions.push({
+          sessionId: newSessionId,
+          userId: matchedUser.uid,
+          deviceId: reqDeviceId,
+          deviceLabel,
+          userAgent: ua,
+          ipAddress: req.ip || 'unknown',
+          createdAt: nowIso,
+          expiresAt: new Date(nowMs + ONE_YEAR_MS).toISOString(),
+          lastSeenAt: nowIso,
+          revoked: false,
+          activityLog: [
+            {
+              id: `dact_${nowMs}`,
+              type: 'login',
+              title: 'Sesion i vazhduar automatikisht',
+              detail: deviceLabel,
+              timestamp: nowIso,
+              timeOfDay: formatTimeOfDaySq(nowIso),
+            },
+          ],
+        });
+        store.commit();
+        req.user = matchedUser;
+        req.sessionId = newSessionId;
+        return matchedUser;
       }
     }
   }
@@ -970,6 +1169,11 @@ async function startServer() {
   // 1. AUTHENTICATION & SINGLE SUPER ADMIN BOOTSTRAP
   // =========================================================
 
+  app.get('/api/app-version', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.json({ buildId: SERVER_BOOT_BUILD_ID });
+  });
+
   app.get('/api/auth/bootstrap-status', (_req, res) => {
     const db = store.getState();
     const superAdminExists = db.users.some((u) => u.role === 'super_admin');
@@ -977,6 +1181,7 @@ async function startServer() {
       superAdminExists,
       requiresSecret: false,
       platformName: db.siteSettings.platformName,
+      buildId: SERVER_BOOT_BUILD_ID,
     });
   });
 
@@ -1180,6 +1385,7 @@ async function startServer() {
         authenticated: false,
         superAdminExists,
         user: null,
+        explicitlyRevoked: Boolean(req.explicitlyRevoked),
       });
       return;
     }
@@ -1194,11 +1400,15 @@ async function startServer() {
         superAdminExists,
         user: null,
         expiredReasonSq: accessEval.messageSq,
+        explicitlyRevoked: true,
       });
       return;
     }
 
-    const activeToken = req.sessionId ? signToken(req.sessionId) : createSessionForUser(req, res, user);
+    const reqDeviceId = extractDeviceIdFromRequest(req);
+    const activeToken = req.sessionId
+      ? buildSignedSessionToken(req.sessionId, user.uid, reqDeviceId)
+      : createSessionForUser(req, res, user);
 
     res.json({
       authenticated: true,
@@ -1211,9 +1421,10 @@ async function startServer() {
   app.post('/api/auth/logout', (req, res) => {
     const db = store.getState();
     const rawToken = extractRawTokenFromRequest(req);
-    const sessionId = verifySignedToken(rawToken);
-    if (sessionId) {
-      const session = db.activeSessions.find((s) => s.sessionId === sessionId);
+    const parsed = parseVerifiedSessionToken(rawToken);
+    if (parsed?.sessionId) {
+      store.markDeleted(parsed.sessionId);
+      const session = db.activeSessions.find((s) => s.sessionId === parsed.sessionId);
       if (session) {
         session.revoked = true;
       }
@@ -4414,12 +4625,15 @@ async function startServer() {
     const { uid } = req.params;
     const db = store.getState();
     let count = 0;
+    const revokedIds: string[] = [];
     db.activeSessions.forEach((s) => {
       if (s.userId === uid && !s.revoked) {
         s.revoked = true;
+        revokedIds.push(s.sessionId);
         count += 1;
       }
     });
+    if (revokedIds.length > 0) store.markDeleted(revokedIds);
     store.addAuditLog({
       actorUid: req.user!.uid,
       actorRole: 'super_admin',
@@ -4545,6 +4759,7 @@ async function startServer() {
     }
 
     targetSession.revoked = true;
+    store.markDeleted(targetSession.sessionId);
     store.addAuditLog({
       actorUid: req.user!.uid,
       actorRole: 'super_admin',
@@ -4841,6 +5056,7 @@ ${leaderboardSummary}`;
       const kickedLabels: string[] = [];
       for (const s of toRevoke) {
         s.revoked = true;
+        store.markDeleted(s.sessionId);
         kickedLabels.push(`${s.deviceLabel || 'Pajisje Web'} (IP: ${s.ipAddress})`);
       }
 
@@ -4881,6 +5097,7 @@ ${leaderboardSummary}`;
       const bannedLabels: string[] = [];
       for (const s of matched) {
         s.revoked = true;
+        store.markDeleted(s.sessionId);
         const devId = s.deviceId || `dev_${s.sessionId}`;
         if (!db.bannedDevices.some((b) => b.userId === targetUser.uid && b.deviceId === devId)) {
           db.bannedDevices.push({
@@ -4945,6 +5162,7 @@ ${leaderboardSummary}`;
           (!keepCurrent || !currentSessionId || s.sessionId !== currentSessionId)
         ) {
           s.revoked = true;
+          store.markDeleted(s.sessionId);
           stoppedCount++;
           stoppedNames.push(s.deviceLabel || 'Shfletues Web');
         }

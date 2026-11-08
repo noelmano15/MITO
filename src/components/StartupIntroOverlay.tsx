@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Volume2, SkipForward } from 'lucide-react';
 
 interface StartupIntroOverlayProps {
   onComplete: () => void;
@@ -9,8 +8,20 @@ const HORIZONTAL_INTRO_WEBP = '/assets/aistudio/intro_tv_1_2x.webp';
 const VERTICAL_INTRO_WEBP = '/assets/aistudio/Startup_mobil_1_2x.webp';
 const INTRO_AUDIO_MP3 = '/assets/aistudio/intro_audio_1_2x.mp3';
 
-// 7.84s original video at 1.2x speed = ~6.53s
+// 7.84s original video at 1.2x speed = ~6.45s
 const INTRO_DURATION_MS = 6450;
+
+// Pre-fetch raw audio bytes at module load so iPhone/Samsung playback has zero network latency
+let preloadedAudioArrayBuffer: ArrayBuffer | null = null;
+if (typeof window !== 'undefined') {
+  window
+    .fetch(INTRO_AUDIO_MP3)
+    .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .then((buf) => {
+      if (buf) preloadedAudioArrayBuffer = buf;
+    })
+    .catch(() => {});
+}
 
 export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComplete }) => {
   const completedRef = useRef(false);
@@ -22,15 +33,11 @@ export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComp
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [mountSeed, setMountSeed] = useState<number>(() => Date.now());
-  const [needsTapForAudio, setNeedsTapForAudio] = useState<boolean>(false);
-  const [audioStarted, setAudioStarted] = useState<boolean>(false);
-
+  const [mountSeed] = useState<number>(() => Date.now());
   const [isHorizontal, setIsHorizontal] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= window.innerHeight;
   });
-
   const [isExiting, setIsExiting] = useState(false);
 
   const stopAllAudio = useCallback(() => {
@@ -79,24 +86,45 @@ export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComp
     }, 280);
   }, [onComplete, stopAllAudio]);
 
-  const scheduleCompletionTimers = useCallback((durationMs: number) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+  const scheduleCompletionTimers = useCallback(
+    (durationMs: number) => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
 
-    timerRef.current = setTimeout(() => {
-      finishIntro();
-    }, durationMs);
+      timerRef.current = setTimeout(() => {
+        finishIntro();
+      }, durationMs);
 
-    fallbackTimerRef.current = setTimeout(() => {
-      finishIntro();
-    }, durationMs + 1500);
-  }, [finishIntro]);
+      fallbackTimerRef.current = setTimeout(() => {
+        finishIntro();
+      }, durationMs + 1000);
+    },
+    [finishIntro]
+  );
 
-  const playViaWebAudioBuffer = useCallback(async (): Promise<boolean> => {
+  const startAudioAutomatically = useCallback(async () => {
+    if (completedRef.current || audioPlayingRef.current) return;
+
+    // 1. Try native HTML5 <audio autoPlay playsInline>
+    const el = audioRef.current;
+    if (el) {
+      try {
+        el.muted = false;
+        el.volume = 1.0;
+        await el.play();
+        audioPlayingRef.current = true;
+        return;
+      } catch {
+        // Fall through to WebAudio API
+      }
+    }
+
+    // 2. Fallback / iOS WebAudio API unlock
     try {
       const AudioCtx =
-        window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return false;
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
       if (!audioCtxRef.current) {
         audioCtxRef.current = new AudioCtx();
       }
@@ -105,61 +133,25 @@ export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComp
         await ctx.resume();
       }
       if (!audioBufferRef.current) {
-        const resp = await fetch(INTRO_AUDIO_MP3);
-        const arr = await resp.arrayBuffer();
-        audioBufferRef.current = await ctx.decodeAudioData(arr);
+        const raw =
+          preloadedAudioArrayBuffer
+            ? preloadedAudioArrayBuffer.slice(0)
+            : await (await fetch(INTRO_AUDIO_MP3)).arrayBuffer();
+        audioBufferRef.current = await ctx.decodeAudioData(raw);
       }
-      if (audioBufferRef.current && !completedRef.current) {
-        if (webAudioSourceRef.current) {
-          try {
-            webAudioSourceRef.current.stop();
-          } catch {
-            // Ignore
-          }
-        }
+      if (audioBufferRef.current && !completedRef.current && !audioPlayingRef.current && ctx.state === 'running') {
         const source = ctx.createBufferSource();
         source.buffer = audioBufferRef.current;
         source.connect(ctx.destination);
         source.start(0);
         webAudioSourceRef.current = source;
         audioPlayingRef.current = true;
-        setAudioStarted(true);
-        setNeedsTapForAudio(false);
-        return true;
       }
     } catch {
-      // Ignore WebAudio decode error
+      // Ignore if browser holds audio until interaction
     }
-    return false;
   }, []);
 
-  const unlockAndPlayAudioWithAnimation = useCallback(async () => {
-    if (completedRef.current || audioPlayingRef.current) return;
-
-    // Restart animation from frame 0 so mobile audio and WebP animation are 100% synchronized
-    setMountSeed(Date.now());
-    scheduleCompletionTimers(INTRO_DURATION_MS);
-
-    const el = audioRef.current;
-    if (el) {
-      try {
-        el.muted = false;
-        el.volume = 1.0;
-        el.currentTime = 0;
-        await el.play();
-        audioPlayingRef.current = true;
-        setAudioStarted(true);
-        setNeedsTapForAudio(false);
-        return;
-      } catch {
-        // Fallback to WebAudio buffer below (especially reliable on iOS Safari)
-      }
-    }
-
-    await playViaWebAudioBuffer();
-  }, [playViaWebAudioBuffer, scheduleCompletionTimers]);
-
-  // Keep orientation in sync if viewport resizes
   useEffect(() => {
     const handleResize = () => {
       const nextHorizontal = window.innerWidth >= window.innerHeight;
@@ -173,91 +165,55 @@ export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComp
     };
   }, []);
 
-  // Preload WebAudio buffer and attempt immediate playback on mount
   useEffect(() => {
-    // Pre-fetch audio buffer for instant mobile unlock on iPhone / Samsung
-    (async () => {
-      try {
-        const AudioCtx =
-          window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (AudioCtx && !audioCtxRef.current) {
-          audioCtxRef.current = new AudioCtx();
-          const resp = await fetch(INTRO_AUDIO_MP3);
-          const arr = await resp.arrayBuffer();
-          audioBufferRef.current = await audioCtxRef.current.decodeAudioData(arr);
-        }
-      } catch {
-        // Ignore preload error
-      }
-    })();
+    scheduleCompletionTimers(INTRO_DURATION_MS);
+    startAudioAutomatically();
 
-    const el = audioRef.current;
-    if (el) {
-      el.volume = 1.0;
-      el.muted = false;
-      el.play()
-        .then(() => {
-          audioPlayingRef.current = true;
-          setAudioStarted(true);
-          setNeedsTapForAudio(false);
-          scheduleCompletionTimers(INTRO_DURATION_MS);
-        })
-        .catch(() => {
-          // Mobile browser (iOS Safari / Android Chrome) requires a user tap to play unmuted audio
-          setNeedsTapForAudio(true);
-          // Give user time to tap for audio, or finish after 8.5s if untouched
-          scheduleCompletionTimers(INTRO_DURATION_MS + 2200);
-        });
-    } else {
-      scheduleCompletionTimers(INTRO_DURATION_MS);
-    }
-
-    const handleFirstUserGesture = () => {
+    // Retry automatic audio start shortly after mount & on any passive touch/gesture without showing any button
+    const retryTimer = setTimeout(() => {
       if (!audioPlayingRef.current && !completedRef.current) {
-        unlockAndPlayAudioWithAnimation();
+        startAudioAutomatically();
+      }
+    }, 120);
+
+    const handleSilentGesture = () => {
+      if (!audioPlayingRef.current && !completedRef.current) {
+        startAudioAutomatically();
       }
     };
 
-    window.addEventListener('touchend', handleFirstUserGesture, { once: true });
-    window.addEventListener('pointerdown', handleFirstUserGesture, { once: true });
-    window.addEventListener('click', handleFirstUserGesture, { once: true });
-    window.addEventListener('keydown', handleFirstUserGesture, { once: true });
+    window.addEventListener('touchstart', handleSilentGesture, { passive: true });
+    window.addEventListener('touchend', handleSilentGesture, { passive: true });
+    window.addEventListener('pointerdown', handleSilentGesture, { passive: true });
+    window.addEventListener('click', handleSilentGesture, { passive: true });
+    window.addEventListener('keydown', handleSilentGesture, { passive: true });
 
     return () => {
-      window.removeEventListener('touchend', handleFirstUserGesture);
-      window.removeEventListener('pointerdown', handleFirstUserGesture);
-      window.removeEventListener('click', handleFirstUserGesture);
-      window.removeEventListener('keydown', handleFirstUserGesture);
+      clearTimeout(retryTimer);
+      window.removeEventListener('touchstart', handleSilentGesture);
+      window.removeEventListener('touchend', handleSilentGesture);
+      window.removeEventListener('pointerdown', handleSilentGesture);
+      window.removeEventListener('click', handleSilentGesture);
+      window.removeEventListener('keydown', handleSilentGesture);
       if (timerRef.current) clearTimeout(timerRef.current);
       if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
       stopAllAudio();
     };
-  }, [scheduleCompletionTimers, stopAllAudio, unlockAndPlayAudioWithAnimation]);
-
-  const handleAnimationLoaded = useCallback(() => {
-    if (!needsTapForAudio) {
-      scheduleCompletionTimers(INTRO_DURATION_MS);
-    }
-  }, [needsTapForAudio, scheduleCompletionTimers]);
+  }, [scheduleCompletionTimers, startAudioAutomatically, stopAllAudio]);
 
   const activeSrc = `${isHorizontal ? HORIZONTAL_INTRO_WEBP : VERTICAL_INTRO_WEBP}?v=${mountSeed}`;
 
   return (
     <div
-      onClick={() => {
-        if (!audioPlayingRef.current) {
-          unlockAndPlayAudioWithAnimation();
-        }
-      }}
-      className={`fixed inset-0 z-[9999] bg-[#0B0B0D] flex items-center justify-center overflow-hidden select-none cursor-pointer transition-opacity duration-300 ${
+      className={`fixed inset-0 z-[9999] bg-[#0B0B0D] flex items-center justify-center overflow-hidden select-none transition-opacity duration-300 ${
         isExiting ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       aria-label="MITO Intro Animacion"
     >
-      {/* Mounted HTML5 Audio for iOS Safari & Android Chrome compatibility */}
       <audio
         ref={audioRef}
         src={INTRO_AUDIO_MP3}
+        autoPlay
         preload="auto"
         playsInline
         className="hidden"
@@ -268,7 +224,6 @@ export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComp
         src={activeSrc}
         alt=""
         draggable={false}
-        onLoad={handleAnimationLoaded}
         onError={finishIntro}
         className={`pointer-events-none select-none ${
           isHorizontal
@@ -276,34 +231,6 @@ export const StartupIntroOverlay: React.FC<StartupIntroOverlayProps> = ({ onComp
             : 'w-full h-full object-cover sm:max-w-[56.25vh] sm:mx-auto'
         }`}
       />
-
-      {/* Mobile Audio Unlock Prompt (shown on iPhone/Samsung when browser blocks auto-sound before first touch) */}
-      {needsTapForAudio && !audioStarted && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            unlockAndPlayAudioWithAnimation();
-          }}
-          className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[10000] px-5 py-3 rounded-2xl bg-[#641C2B]/95 border border-[#C8A66A] text-[#F4F0E8] text-xs sm:text-sm font-semibold shadow-2xl flex items-center gap-2.5 animate-pulse cursor-pointer whitespace-nowrap"
-        >
-          <Volume2 className="w-4 h-4 text-[#C8A66A]" />
-          <span>Prek ekranin për Hyrjen me Audio</span>
-        </button>
-      )}
-
-      {/* Subtle Skip Button in Top-Right Corner */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          finishIntro();
-        }}
-        className="fixed top-6 right-5 z-[10000] px-3.5 py-2 rounded-xl bg-[#141418]/80 hover:bg-[#202024] border border-[#C8A66A]/35 text-[#F4F0E8]/85 text-xs font-medium flex items-center gap-1.5 backdrop-blur-md cursor-pointer"
-      >
-        <span>Kalo</span>
-        <SkipForward className="w-3.5 h-3.5 text-[#C8A66A]" />
-      </button>
     </div>
   );
 };

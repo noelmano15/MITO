@@ -3,10 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ShieldAlert, ArrowRight } from 'lucide-react';
 import { testFirestoreConnection } from './lib/firebase';
-import { apiFetch } from './utils/sessionToken';
+import {
+  apiFetch,
+  getCachedUser,
+  setCachedUser,
+  getPersistedAccessCode,
+  clearAllPersistedAuth,
+} from './utils/sessionToken';
 import { BrandLogo } from './components/BrandLogo';
 import { StartupIntroOverlay } from './components/StartupIntroOverlay';
 import { LoginView } from './components/LoginView';
@@ -40,11 +46,12 @@ export default function App() {
   });
   const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname || '/');
   const [currentSearch, setCurrentSearch] = useState<string>(() => window.location.search || '');
-  const [authChecking, setAuthChecking] = useState(true);
-  const [superAdminExists, setSuperAdminExists] = useState(false);
+  const [user, setUser] = useState<UserAccount | null>(() => getCachedUser());
+  const [authChecking, setAuthChecking] = useState<boolean>(() => getCachedUser() === null);
+  const [superAdminExists, setSuperAdminExists] = useState(true);
   const [requiresBootstrapSecret, setRequiresBootstrapSecret] = useState(false);
-  const [user, setUser] = useState<UserAccount | null>(null);
   const [expiredReasonSq, setExpiredReasonSq] = useState<string | null>(null);
+  const activeBuildIdRef = useRef<string | null>(null);
 
   // User Catalog State
   const [standardVideos, setStandardVideos] = useState<VideoContent[]>([]);
@@ -97,51 +104,155 @@ export default function App() {
       setProgressList(data.progress || []);
       setGames(data.games || []);
     } catch {
-      // Ignore network error during initial load
+      // Ignore network error during initial load or server update
     }
   }, []);
 
-  const checkSessionAndBootstrap = useCallback(async () => {
-    setAuthChecking(true);
-    try {
-      const [sessionRes, bootRes] = await Promise.all([
-        apiFetch('/api/auth/session'),
-        apiFetch('/api/auth/bootstrap-status'),
-      ]);
-      const sessionData = await sessionRes.json();
-      const bootData = await bootRes.json();
-
-      setSuperAdminExists(Boolean(bootData.superAdminExists ?? sessionData.superAdminExists));
-      setRequiresBootstrapSecret(Boolean(bootData.requiresBootstrapSecret));
-
-      if (sessionData.expiredReasonSq) {
-        setExpiredReasonSq(sessionData.expiredReasonSq);
-        setUser(null);
-        navigate('/access-expired');
-        return;
+  const checkSessionAndBootstrap = useCallback(
+    async (silent = false) => {
+      if (!silent && !getCachedUser()) {
+        setAuthChecking(true);
       }
-
-      if (sessionData.authenticated && sessionData.user) {
-        setUser(sessionData.user);
-        await fetchCatalog();
-        if (window.location.pathname === '/' || window.location.pathname === '/login') {
-          navigate(sessionData.user.role === 'super_admin' ? '/admin' : '/home');
+      try {
+        const [sessionRes, bootRes] = await Promise.all([
+          apiFetch('/api/auth/session'),
+          apiFetch('/api/auth/bootstrap-status'),
+        ]);
+        if (!sessionRes.ok) {
+          // Transient 502/503 while server restarts during update: keep cached user logged in!
+          return;
         }
-      } else {
-        setUser(null);
+        const sessionData = await sessionRes.json();
+        const bootData = bootRes.ok ? await bootRes.json() : {};
+
+        setSuperAdminExists(Boolean(bootData.superAdminExists ?? sessionData.superAdminExists ?? true));
+        setRequiresBootstrapSecret(Boolean(bootData.requiresBootstrapSecret));
+
+        if (sessionData.expiredReasonSq) {
+          clearAllPersistedAuth();
+          setExpiredReasonSq(sessionData.expiredReasonSq);
+          setUser(null);
+          navigate('/access-expired');
+          return;
+        }
+
+        if (sessionData.explicitlyRevoked) {
+          clearAllPersistedAuth();
+          setUser(null);
+          return;
+        }
+
+        if (sessionData.authenticated && sessionData.user) {
+          setCachedUser(sessionData.user);
+          setUser(sessionData.user);
+          await fetchCatalog();
+          if (window.location.pathname === '/' || window.location.pathname === '/login') {
+            navigate(sessionData.user.role === 'super_admin' ? '/admin' : '/home');
+          }
+          return;
+        }
+
+        // If server returned authenticated: false (NOT explicitlyRevoked), try silent re-login using saved code
+        const savedCode = getPersistedAccessCode() || getCachedUser()?.fullCode;
+        if (savedCode && !savedCode.includes('*')) {
+          const reloginRes = await apiFetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: savedCode }),
+          });
+          if (reloginRes.ok) {
+            const reloginData = await reloginRes.json();
+            if (reloginData.user) {
+              setCachedUser(reloginData.user);
+              setUser(reloginData.user);
+              await fetchCatalog();
+              if (window.location.pathname === '/' || window.location.pathname === '/login') {
+                navigate(reloginData.user.role === 'super_admin' ? '/admin' : '/home');
+              }
+              return;
+            }
+          } else if (reloginRes.status === 403) {
+            clearAllPersistedAuth();
+            setUser(null);
+            return;
+          }
+        }
+
+        if (!getCachedUser()) {
+          setUser(null);
+        }
+      } catch {
+        // Network error during update deployment: never log out a cached user!
+      } finally {
+        setAuthChecking(false);
       }
-    } catch {
-      setUser(null);
-    } finally {
-      setAuthChecking(false);
-    }
-  }, [fetchCatalog, navigate]);
+    },
+    [fetchCatalog, navigate]
+  );
 
   useEffect(() => {
-    checkSessionAndBootstrap();
+    checkSessionAndBootstrap(false);
   }, [checkSessionAndBootstrap]);
 
+  // Automatic seamless app update detector: applies pushed updates on phone/web without logging out
+  useEffect(() => {
+    let mounted = true;
+    const checkAppVersion = async () => {
+      try {
+        const res = await window.fetch(`/api/app-version?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok || !mounted) return;
+        const data = await res.json();
+        const serverBuildId = String(data.buildId || '');
+        if (!serverBuildId) return;
+
+        if (!activeBuildIdRef.current) {
+          activeBuildIdRef.current = serverBuildId;
+          return;
+        }
+
+        if (activeBuildIdRef.current !== serverBuildId) {
+          activeBuildIdRef.current = serverBuildId;
+          // Refresh session & catalog first so cached user and token are 100% up to date
+          await checkSessionAndBootstrap(true);
+          await fetchCatalog();
+          try {
+            sessionStorage.setItem('mito_intro_seen_session', '1');
+            if ('caches' in window) {
+              const keys = await window.caches.keys();
+              await Promise.all(keys.map((k) => window.caches.delete(k)));
+            }
+          } catch {
+            // Ignore cache clear error
+          }
+          // Reload seamlessly in place while keeping the user logged in
+          window.location.reload();
+        }
+      } catch {
+        // Ignore transient network error while update is deploying
+      }
+    };
+
+    checkAppVersion();
+    const interval = window.setInterval(checkAppVersion, 12000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkAppVersion();
+        checkSessionAndBootstrap(true);
+      }
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [checkSessionAndBootstrap, fetchCatalog]);
+
   const handleLogout = async () => {
+    clearAllPersistedAuth();
     await apiFetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
     navigate('/login');

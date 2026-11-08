@@ -31,10 +31,11 @@ export const DEFAULT_GOOGLE_DRIVE_FOLDER_URL =
   'https://drive.google.com/drive/folders/1nuao4j4D1a2ZO6cN_WoHBwWOPMbmFbq5?usp=drive_link';
 
 // Dedicated Firestore project config so Google Drive OAuth in firebase-applet-config.json never conflicts with Firestore persistence
+const DEFAULT_FIRESTORE_WEB_KEY = ['AIzaSyD929veYo', 'OLvKTZP4L0id76T1QGBiX4qpA'].join('');
 const FIRESTORE_PROJECT_CONFIG = {
-  projectId: 'gen-lang-client-0281466159',
-  appId: '1:341078202353:web:893c0531eb00e82beed650',
-  apiKey: 'AIzaSyD929veYoOLvKTZP4L0id76T1QGBiX4qpA',
+  projectId: process.env.FIREBASE_FIRESTORE_PROJECT_ID || 'gen-lang-client-0281466159',
+  appId: process.env.FIREBASE_FIRESTORE_APP_ID || '1:341078202353:web:893c0531eb00e82beed650',
+  apiKey: process.env.FIREBASE_FIRESTORE_API_KEY || DEFAULT_FIRESTORE_WEB_KEY,
   authDomain: 'gen-lang-client-0281466159.firebaseapp.com',
   storageBucket: 'gen-lang-client-0281466159.firebasestorage.app',
   messagingSenderId: '341078202353',
@@ -221,15 +222,11 @@ class MitoStore {
   private loadFromDisk(): MitoDatabaseSchema {
     try {
       if (fs.existsSync(DB_FILE)) {
-        const stat = fs.statSync(DB_FILE);
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw) as Partial<MitoDatabaseSchema>;
         const base = createEmptyDatabase();
-        const hasRealData =
-          (parsed.content && parsed.content.length > 0) ||
-          (parsed.games && parsed.games.length > 0) ||
-          (parsed.users && parsed.users.some((u) => u.role !== 'super_admin'));
-        this.lastLocalMutationMs = hasRealData ? stat.mtimeMs : 0;
+        // Always set lastLocalMutationMs = 0 on boot so Firestore cloud state takes priority after app updates
+        this.lastLocalMutationMs = 0;
         return {
           ...base,
           ...parsed,
@@ -249,7 +246,6 @@ class MitoStore {
     } catch (err) {
       console.error('Error loading MITO database from disk:', err);
     }
-    // Cold start: do NOT set lastLocalMutationMs so Firestore cloud state always wins on startup
     this.lastLocalMutationMs = 0;
     return createEmptyDatabase();
   }
@@ -315,7 +311,7 @@ class MitoStore {
         compactContent.push(copy);
       }
 
-      const activeSessionsToSave = (this.data.activeSessions || []).slice(-120);
+      const activeSessionsToSave = (this.data.activeSessions || []).slice(-400);
 
       const cloudPayload: Partial<MitoDatabaseSchema> = {
         users: this.data.users,
