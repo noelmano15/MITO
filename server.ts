@@ -4865,81 +4865,37 @@ async function startServer() {
   });
 
   // ============================================================================
-  // LIVE SUPPORT CHAT — "MITO" SUPER-AGENT (Full Platform Access & Account/Admin Intervention)
+  // LIVE SUPPORT CHAT — "MITO" AI ASSISTANT (Powered by Real Gemini API)
   // ============================================================================
-  const findTargetUserForMitoCommand = (
-    db: ReturnType<typeof store.getState>,
-    caller: UserAccount,
-    userMessage: string,
-    explicitTargetQuery?: string
-  ): UserAccount => {
-    const query = (explicitTargetQuery || '').trim().toLowerCase();
-    const msgLower = userMessage.toLowerCase();
-
-    if (query) {
-      const byExact = db.users.find(
-        (u) =>
-          u.uid.toLowerCase() === query ||
-          u.displayName.toLowerCase().includes(query) ||
-          (u.fullCode && u.fullCode.replace(/\D/g, '') === query.replace(/\D/g, '')) ||
-          (query.includes('admin') && u.role === 'super_admin')
-      );
-      if (byExact) return byExact;
-    }
-
-    if (
-      msgLower.includes('super admin') ||
-      msgLower.includes('superadmin') ||
-      msgLower.includes('llogarinë e adminit') ||
-      msgLower.includes('llogarine e adminit')
-    ) {
-      const adminAcc = db.users.find((u) => u.role === 'super_admin');
-      if (adminAcc) return adminAcc;
-    }
-
-    for (const u of db.users) {
-      const firstPart = u.displayName.split(' ')[0].toLowerCase();
-      if (firstPart.length >= 3 && msgLower.includes(firstPart)) {
-        return u;
-      }
-    }
-
-    return db.users.find((u) => u.uid === caller.uid) || caller;
-  };
-
-  const buildFullPlatformContextForSupportAi = (
+  const buildUserSafeContextForSupportAi = (
     db: ReturnType<typeof store.getState>,
     user: UserAccount,
     currentSessionId?: string
   ): string => {
-    const allUsersSummary = (db.users || [])
-      .map((u) => {
-        const uSessions = (db.activeSessions || []).filter((s) => s.userId === u.uid && !s.revoked);
-        return `  • ${u.displayName} [UID: ${u.uid}] | Roli: ${u.role} | Kodi i plotë: ${u.fullCode || u.maskedCode} | Statusi: ${u.status} | Paketa: ${u.accessPolicy?.preset || 'full'} | XP: ${u.stats?.totalXp || 0}, Pikë: ${u.stats?.totalPoints || 0}, Vendi #${u.stats?.rank || 1} | Shkolla: ${u.stats?.school || '-'} | Sesione aktive: ${uSessions.length}`;
-      })
-      .join('\n');
+    const userSessions = (db.activeSessions || []).filter(
+      (s) => s.userId === user.uid && !s.revoked
+    );
 
-    const allSessionsSummary =
-      (db.activeSessions || []).filter((s) => !s.revoked).length === 0
-        ? 'Asnjë sesion aktiv i regjistruar.'
-        : (db.activeSessions || [])
-            .filter((s) => !s.revoked)
+    const sessionsSummary =
+      userSessions.length === 0
+        ? 'Vetëm pajisja aktuale e lidhur.'
+        : userSessions
             .map((s, idx) => {
-              const owner = db.users.find((u) => u.uid === s.userId);
               const isCurrent = currentSessionId && s.sessionId === currentSessionId;
               const recentActs = (s.activityLog || [])
                 .slice(0, 4)
                 .map((a) => `${a.title} (ora ${a.timeOfDay})`)
                 .join('; ');
-              return `  ${idx + 1}. Llogaria: "${owner?.displayName || s.userId}" | Pajisja: "${s.deviceLabel || 'Shfletues Web'}" [DeviceID: ${s.deviceId || 'pa-id'}, SessionID: ${s.sessionId}]${isCurrent ? ' (PAJISJA AKTUALE E PËRDORUESIT NË CHAT)' : ''} | IP: ${s.ipAddress} | Aktiv së fundmi: ${s.lastSeenAt} | Aktiviteti: ${recentActs || 'Hyrje në platformë'}`;
+              return `  ${idx + 1}. Pajisja: "${s.deviceLabel || 'Shfletues Web'}" [DeviceID: ${s.deviceId || 'pa-id'}, SessionID: ${s.sessionId}]${isCurrent ? ' (PAJISJA AKTUALE E PËRDORUESIT NË CHAT)' : ''} | IP: ${s.ipAddress} | Aktiv së fundmi: ${s.lastSeenAt} | Aktiviteti: ${recentActs || 'Hyrje në platformë'}`;
             })
             .join('\n');
 
+    const userBannedDevices = (db.bannedDevices || []).filter((b) => b.userId === user.uid);
     const bannedSummary =
-      (db.bannedDevices || []).length === 0
-        ? 'Asnjë pajisje e bllokuar.'
-        : (db.bannedDevices || [])
-            .map((b) => `"${b.deviceLabel}" (DeviceID: ${b.deviceId}, UserID: ${b.userId}, Arsyeja: ${b.reason})`)
+      userBannedDevices.length === 0
+        ? 'Asnjë pajisje e bllokuar në llogarinë e përdoruesit.'
+        : userBannedDevices
+            .map((b) => `"${b.deviceLabel}" (DeviceID: ${b.deviceId}, Arsyeja: ${b.reason})`)
             .join(', ');
 
     const userProgress = (db.playbackProgress || []).filter((p) => p.userId === user.uid);
@@ -4947,28 +4903,22 @@ async function startServer() {
     const publishedGames = (db.games || []).filter((g) => g.publicationStatus === 'published');
     const topLeaderboard = [...(db.leaderboardEntries || [])]
       .sort((a, b) => b.totalPoints - a.totalPoints)
-      .slice(0, 10);
+      .slice(0, 5);
 
     const contentSummary = publishedContent
       .map((c) => {
         const prog = userProgress.find((p) => p.contentId === c.contentId);
         const mins = Math.floor((c.durationSeconds || 631) / 60);
         const secs = (c.durationSeconds || 631) % 60;
-        return `- Titulli: "${c.title}" (ID: ${c.contentId}) | Kohëzgjatja: ${mins}m ${secs}s (${c.durationSeconds}s) | Rezolucioni: ${c.width || 1920}x${c.height || 824} | Kategoria: Legjendat | Shikime: ${c.viewsCount || 0} | Progresi i përdoruesit aktual: ${prog ? `${prog.completionPercent}% (${Math.round(prog.currentTimeSeconds)}s)` : '0%'} | Përshkrimi: ${c.synopsis}`;
+        return `- Titulli: "${c.title}" | Kohëzgjatja: ${mins}m ${secs}s | Rezolucioni: ${c.width || 1920}x${c.height || 824} | Kategoria: Legjendat | Progresi i përdoruesit: ${prog ? `${prog.completionPercent}% (${Math.round(prog.currentTimeSeconds)}s)` : '0%'} | Përshkrimi: ${c.synopsis}`;
       })
       .join('\n');
 
-    const gamesAndQuestionsSummary = publishedGames
-      .map((g) => {
-        const qs = (db.gameQuestions || [])
-          .filter((q) => q.gameId === g.gameId)
-          .map(
-            (q, i) =>
-              `    P${i + 1}: "${q.questionText}" -> Përgjigjja e saktë: "${q.choices[q.correctChoiceIndex]}" (Alternativat: ${q.choices.join(' / ')} | Shpjegimi: ${q.explanation})`
-          )
-          .join('\n');
-        return `- Loja/Kuizi: "${g.title}" (ID: ${g.gameId}, Lloji: ${g.gameType}, Vështirësia: ${g.difficulty}, Shpërblimi: ${g.xpReward} XP, Kërkesa e shikimit: 0% — e hapur menjëherë)\n${qs}`;
-      })
+    const gamesSummary = publishedGames
+      .map(
+        (g) =>
+          `- Kuizi: "${g.title}" (Lloji: ${g.gameType}, Vështirësia: ${g.difficulty}, Shpërblimi për përfundim me sukses: ${g.xpReward} XP)`
+      )
       .join('\n');
 
     const leaderboardSummary =
@@ -4977,34 +4927,29 @@ async function startServer() {
         : topLeaderboard
             .map(
               (e, i) =>
-                `#${i + 1} ${e.displayName} (${e.totalPoints} pikë, ${e.totalXp} XP, ${e.school || e.country})`
+                `#${i + 1} ${e.displayName} (${e.totalPoints} pikë, ${e.totalXp} XP)`
             )
             .join(' | ');
 
-    return `=== IDENTITETI YT: SUPER-AGJENTI "MITO" ===
-Ti quhesh "MITO". Je Super-Agjenti AI me akses dhe autoritet të plotë mbi të gjithë platformën MITO, përfshirë llogarinë e përdoruesit aktual, llogarinë e Super Adminit dhe çdo llogari tjetër, pajisje, kod, film dhe kuiz.
+    return `=== IDENTITETI YT: ASISTENTI ZYRTAR AI "MITO" ===
+Ti quhesh "MITO". Je Asistenti Zyrtar Inteligjent i Mbështetjes në platformën shqiptare "MITO — Legjenda · Histori · Lojëra".
 
-=== PËRDORUESI QË PO TË SHKRUAN TANI NË CHAT ===
-- Emri: ${user.displayName} (UID: ${user.uid}, Roli: ${user.role}, Statusi: ${user.status})
-- Kodi i plotë i hyrjes: ${user.fullCode || user.maskedCode} (Maskuar: ${user.maskedCode})
-- Statistikat: ${user.stats?.totalXp || 0} XP, ${user.stats?.totalPoints || 0} Pikë, Vendi #${user.stats?.rank || 1}, Kuice: ${user.stats?.gamesPlayed || 0}
+=== TË DHËNAT E LLOGARISË SË PËRDORUESIT AKTUAL ===
+- Emri: ${user.displayName} (UID: ${user.uid}, Statusi: ${user.status})
+- Kodi i hyrjes i llogarisë: ${user.fullCode || user.maskedCode}
+- Statistikat e fituara: ${user.stats?.totalXp || 0} XP, ${user.stats?.totalPoints || 0} Pikë, Vendi #${user.stats?.rank || 1}, Kuice të luajtura: ${user.stats?.gamesPlayed || 0}
 
-=== TË GJITHA LLOGARITË NË PLATFORMË (PËRFSHIRË SUPER ADMIN DHE PËRDORUESIT) ===
-${allUsersSummary}
+=== PAJISJET DHE SESIONET AKTIVE TË KËTIJ PËRDORUESI ===
+${sessionsSummary}
+- Pajisje të bllokuara në këtë llogari: ${bannedSummary}
 
-=== TË GJITHA PAJISJET & SESIONET AKTIVE NË PLATFORMË ===
-${allSessionsSummary}
-- Pajisje të bllokuara (Banned): ${bannedSummary}
-
-=== KATALOGU I FILMAVE DHE PLAYER-I ===
+=== FILMAT DHE FUNKSIONIMI I PLATFORMËS ===
 ${contentSummary || '- BESA Short Film Higgsfield Global Film Festival Nominee OLL KORRECT (824p) (10m 31s)'}
-- Player-i: Filmi "BESA Short Film" (10m 31s, 1920x824) në kategorinë "Legjendat" është sinkronizuar nga Google Drive (MITO content). Titrat dhe PiP janë hequr; butoni Fullscreen ndodhet poshtë-djathtas. Në faqe shfaqen vetëm seksionet "Vazhdo Shikimin" dhe "Legjendat".
+- Player-i: Filmi "BESA Short Film" ndodhet te seksioni "Legjendat" dhe "Vazhdo Shikimin". Butoni Fullscreen ndodhet poshtë-djathtas në player.
 
-=== TË GJITHA KUIZET DHE PYETJET/PËRGJIGJET E SAKTA ===
-${gamesAndQuestionsSummary}
-
-=== RENDITJA KOMBËTARE ===
-${leaderboardSummary}`;
+=== KUIZET DHE RENDITJA ===
+${gamesSummary}
+- Renditja aktuale (Top 5): ${leaderboardSummary}`;
   };
 
   interface MitoExecutedActionResult {
@@ -5012,16 +4957,15 @@ ${leaderboardSummary}`;
     summarySq: string;
   }
 
-  const executeMitoSuperAgentAction = (
+  // Safe account support actions ONLY for the logged-in user's own account.
+  // Never modifies XP/points, never deletes movies/platform data, never touches other users' accounts.
+  const executeMitoSupportAction = (
     db: ReturnType<typeof store.getState>,
     caller: UserAccount,
     actionType: string,
     params: {
-      targetUserQuery?: string;
       deviceKeyword?: string;
       newValue?: string;
-      numericValue?: number;
-      userMessage?: string;
     },
     currentSessionId?: string
   ): MitoExecutedActionResult => {
@@ -5030,14 +4974,9 @@ ${leaderboardSummary}`;
       return { executed: false, summarySq: '' };
     }
 
-    const targetUser = findTargetUserForMitoCommand(
-      db,
-      caller,
-      params.userMessage || '',
-      params.targetUserQuery
-    );
+    const targetUser = db.users.find((u) => u.uid === caller.uid) || caller;
 
-    // 1. Kick / Stop specific device(s) by keyword (e.g., "Mac", "iPhone", "Chrome", "Linux")
+    // 1. Kick / Stop specific device(s) on the user's own account
     if (cleanAction === 'kick_specific_device' || cleanAction === 'stop_device') {
       const kw = String(params.deviceKeyword || '').trim().toLowerCase();
       const activeForTarget = (db.activeSessions || []).filter(
@@ -5065,23 +5004,23 @@ ${leaderboardSummary}`;
         actorRole: caller.role,
         action: 'MITO_AI_KICKED_DEVICE',
         targetId: targetUser.uid,
-        details: `Super-Agjenti MITO nxori jashtë ${kickedLabels.length} pajisje (${kickedLabels.join(', ')}) nga llogaria e ${targetUser.displayName}.`,
+        details: `Asistenti MITO nxori jashtë ${kickedLabels.length} pajisje (${kickedLabels.join(', ')}) nga llogaria e ${targetUser.displayName}.`,
         severity: 'warning',
       });
 
       if (kickedLabels.length > 0) {
         return {
           executed: true,
-          summarySq: `✅ Veprim i kryer nga MITO: U nxorën jashtë (Log Out) menjëherë ${kickedLabels.length} pajisje nga llogaria "${targetUser.displayName}": ${kickedLabels.join('; ')}.`,
+          summarySq: `✅ U nxorën jashtë (Log Out) ${kickedLabels.length} pajisje nga llogaria juaj: ${kickedLabels.join('; ')}.`,
         };
       }
       return {
         executed: true,
-        summarySq: `ℹ️ MITO kontrolloi llogarinë "${targetUser.displayName}": të gjitha sesionet e pajisjes "${kw ? kw.toUpperCase() : 'tjetër'}" janë nxjerrë tashmë jashtë (Log Out) dhe nuk rezulton më asnjë sesion aktiv nga ajo pajisje.`,
+        summarySq: `ℹ️ Nuk u gjet asnjë pajisje tjetër aktive${kw ? ` që përputhet me "${kw}"` : ''} në llogarinë tuaj.`,
       };
     }
 
-    // 2. Ban specific device forever
+    // 2. Ban specific device on the user's own account
     if (cleanAction === 'ban_device') {
       const kw = String(params.deviceKeyword || '').trim().toLowerCase();
       if (!Array.isArray(db.bannedDevices)) db.bannedDevices = [];
@@ -5089,7 +5028,8 @@ ${leaderboardSummary}`;
         (s) => s.userId === targetUser.uid && !s.revoked
       );
       const matched = activeForTarget.filter((s) => {
-        if (!kw) return !currentSessionId || s.sessionId !== currentSessionId;
+        if (currentSessionId && s.sessionId === currentSessionId) return false;
+        if (!kw) return true;
         const label = `${s.deviceLabel || ''} ${s.userAgent || ''} ${s.deviceId || ''}`.toLowerCase();
         return label.includes(kw);
       });
@@ -5107,7 +5047,7 @@ ${leaderboardSummary}`;
             deviceLabel: s.deviceLabel || 'Pajisje e bllokuar',
             ipAddress: s.ipAddress,
             userAgent: s.userAgent,
-            reason: `Bllokuar përgjithmonë nga Super-Agjenti MITO me kërkesë të përdoruesit.`,
+            reason: `Bllokuar nga Asistenti MITO me kërkesë të përdoruesit.`,
             bannedAt: new Date().toISOString(),
             bannedByUid: caller.uid,
           });
@@ -5118,16 +5058,16 @@ ${leaderboardSummary}`;
       if (bannedLabels.length > 0) {
         return {
           executed: true,
-          summarySq: `🚫 Veprim i kryer nga MITO: Pajisja ${bannedLabels.join(', ')} u nxor jashtë dhe u BLLOKUA PËRGJITHMONË nga llogaria "${targetUser.displayName}".`,
+          summarySq: `🚫 Pajisja ${bannedLabels.join(', ')} u nxor jashtë dhe u bllokua nga llogaria juaj.`,
         };
       }
       return {
         executed: true,
-        summarySq: `ℹ️ Nuk u gjet asnjë sesion aktiv që përputhet me "${kw}" për t'u bllokuar në llogarinë "${targetUser.displayName}".`,
+        summarySq: `ℹ️ Nuk u gjet asnjë pajisje tjetër aktive${kw ? ` që përputhet me "${kw}"` : ''} për t'u bllokuar.`,
       };
     }
 
-    // 3. Unban device
+    // 3. Unban device on the user's own account
     if (cleanAction === 'unban_device') {
       const kw = String(params.deviceKeyword || '').trim().toLowerCase();
       const beforeCount = (db.bannedDevices || []).length;
@@ -5145,21 +5085,20 @@ ${leaderboardSummary}`;
         executed: true,
         summarySq:
           removedCount > 0
-            ? `🔓 Veprim i kryer nga MITO: U hoq bllokimi për ${removedCount} pajisje në llogarinë "${targetUser.displayName}".`
-            : `ℹ️ Nuk ka asnjë pajisje të bllokuar në llogarinë "${targetUser.displayName}".`,
+            ? `🔓 U hoq bllokimi për ${removedCount} pajisje në llogarinë tuaj.`
+            : `ℹ️ Nuk keni asnjë pajisje të bllokuar në llogarinë tuaj.`,
       };
     }
 
-    // 4. Logout all other devices (or all devices)
-    if (cleanAction === 'logout_other_devices' || cleanAction === 'logout_all_devices') {
-      const keepCurrent = cleanAction === 'logout_other_devices' && targetUser.uid === caller.uid;
+    // 4. Logout all other devices on the user's own account
+    if (cleanAction === 'logout_other_devices') {
       let stoppedCount = 0;
       const stoppedNames: string[] = [];
       for (const s of db.activeSessions || []) {
         if (
           s.userId === targetUser.uid &&
           !s.revoked &&
-          (!keepCurrent || !currentSessionId || s.sessionId !== currentSessionId)
+          (!currentSessionId || s.sessionId !== currentSessionId)
         ) {
           s.revoked = true;
           store.markDeleted(s.sessionId);
@@ -5172,36 +5111,20 @@ ${leaderboardSummary}`;
         actorRole: caller.role,
         action: 'MITO_AI_LOGOUT_DEVICES',
         targetId: targetUser.uid,
-        details: `MITO mbylli ${stoppedCount} sesione në llogarinë "${targetUser.displayName}".`,
+        details: `MITO mbylli ${stoppedCount} sesione të tjera në llogarinë "${targetUser.displayName}".`,
         severity: 'warning',
       });
       return {
         executed: true,
         summarySq:
           stoppedCount > 0
-            ? `✅ Veprim i kryer nga MITO: U mbyllën (Log Out) ${stoppedCount} pajisje në llogarinë "${targetUser.displayName}" (${stoppedNames.join(', ')}).`
-            : `ℹ️ Llogaria "${targetUser.displayName}" ka aktive vetëm pajisjen tuaj aktuale — nuk ka pajisje të tjera të lidhura.`,
+            ? `✅ U mbyllën (Log Out) ${stoppedCount} pajisje të tjera nga llogaria juaj (${stoppedNames.join(', ')}).`
+            : `ℹ️ Vetëm pajisja juaj aktuale është e lidhur — nuk ka pajisje të tjera aktive.`,
       };
     }
 
-    // 5. Regenerate or Set Custom Code (Works for BOTH Users and Super Admin!)
-    if (cleanAction === 'regenerate_code' || cleanAction === 'set_code') {
-      const customDigits = String(params.newValue || '').replace(/\D/g, '');
-      if (customDigits.length === 9) {
-        const formatted = `${customDigits.slice(0, 3)}-${customDigits.slice(3, 6)}-${customDigits.slice(6, 9)}`;
-        const salt = crypto.randomBytes(16).toString('hex');
-        const hash = hashAccessCode(customDigits, salt, PEPPER);
-        targetUser.codeSalt = salt;
-        targetUser.codeHash = hash;
-        targetUser.maskedCode = maskAccessCode(customDigits);
-        targetUser.fullCode = formatted;
-        targetUser.status = 'active';
-        return {
-          executed: true,
-          summarySq: `🔑 Veprim i kryer nga MITO: Kodi i hyrjes për llogarinë "${targetUser.displayName}" (${targetUser.role === 'super_admin' ? 'Super Admin' : 'Përdorues'}) u ndryshua në **${formatted}** pa shkëputur sesionin aktiv!`,
-        };
-      }
-
+    // 5. Regenerate the user's own access code (keeps current session logged in)
+    if (cleanAction === 'regenerate_code') {
       const existingHashes = new Set(db.users.map((u) => u.codeHash));
       const generated = generateSecureAccessCode(
         existingHashes,
@@ -5223,255 +5146,21 @@ ${leaderboardSummary}`;
       });
       return {
         executed: true,
-        summarySq: `🔑 Veprim i kryer nga MITO: Kodi i ri i hyrjes për "${targetUser.displayName}" (${targetUser.role === 'super_admin' ? 'Super Admin' : 'Përdorues'}) u gjenerua me sukses: **${generated.formattedCode}**. Pajisja juaj aktuale mbetet e lidhur, ndërsa çdo pajisje e nxjerrë jashtë nuk mund të hyjë më me kodin e vjetër!`,
+        summarySq: `🔑 Kodi juaj i ri i hyrjes u gjenerua: **${generated.formattedCode}**. Pajisja juaj aktuale mbetet e lidhur, ndërsa askush nuk mund të hyjë më me kodin e vjetër.`,
       };
     }
 
-    // 6. Update User or Super Admin Profile / Name / School / Policy / Status
-    if (cleanAction === 'update_account' || cleanAction === 'update_profile') {
+    // 6. Update the user's own display name
+    if (cleanAction === 'update_display_name') {
       const val = String(params.newValue || '').trim();
-      const changes: string[] = [];
-      if (val) {
-        if (val.toLowerCase() === 'suspended' || val.toLowerCase() === 'pezullo') {
-          targetUser.status = 'suspended';
-          changes.push('statusi u vendos në "suspended"');
-        } else if (val.toLowerCase() === 'active' || val.toLowerCase() === 'aktiv') {
-          targetUser.status = 'active';
-          targetUser.accessPolicy = createAccessPolicyPreset('full');
-          changes.push('statusi u aktivizua me Akses të Plotë');
-        } else {
-          targetUser.displayName = val;
-          changes.push(`emri u ndryshua në "${val}"`);
-        }
-      } else {
-        targetUser.status = 'active';
-        targetUser.accessPolicy = createAccessPolicyPreset('full');
-        changes.push('llogaria u përditësua me Akses të Plotë');
-      }
-      syncLeaderboardForUser(targetUser);
-      return {
-        executed: true,
-        summarySq: `✅ Veprim i kryer nga MITO në llogarinë "${targetUser.displayName}": ${changes.join(', ')}.`,
-      };
-    }
-
-    // 7. Update XP / Points / Stats
-    if (cleanAction === 'update_stats') {
-      const amount = Number(params.numericValue || 500);
-      if (!targetUser.stats) {
-        targetUser.stats = {
-          totalXp: 0,
-          totalPoints: 0,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          correctAnswers: 0,
-          totalAnswers: 0,
-          accuracyPercent: 100,
-          currentStreak: 1,
-          bestStreak: 1,
-          rank: 1,
-          country: 'Shqipëri',
-          watchedSecondsToday: 0,
-          gameSessionsToday: 0,
-          lastActivityDate: new Date().toISOString().slice(0, 10),
+      if (val && val.length >= 2 && val.length <= 40) {
+        targetUser.displayName = val;
+        syncLeaderboardForUser(targetUser);
+        return {
+          executed: true,
+          summarySq: `✅ Emri i profilit tuaj u përditësua në "${val}".`,
         };
       }
-      targetUser.stats.totalXp = Math.max(0, (targetUser.stats.totalXp || 0) + amount);
-      targetUser.stats.totalPoints = Math.max(0, (targetUser.stats.totalPoints || 0) + amount * 2);
-      syncLeaderboardForUser(targetUser);
-      return {
-        executed: true,
-        summarySq: `🏆 Veprim i kryer nga MITO: U përditësuan statistikat për "${targetUser.displayName}" — tani ka **${targetUser.stats.totalXp} XP** dhe **${targetUser.stats.totalPoints} Pikë** në renditje!`,
-      };
-    }
-
-    // 8. Create a New User Account directly from Chat
-    if (cleanAction === 'create_user') {
-      const newName = String(params.newValue || 'Përdorues i Ri MITO').trim();
-      const existingHashes = new Set(db.users.map((u) => u.codeHash));
-      const generated = generateSecureAccessCode(existingHashes, PEPPER, 'full');
-      const nowIso = new Date().toISOString();
-      const newUser: UserAccount = {
-        uid: `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
-        codeHash: generated.hash,
-        codeSalt: generated.salt,
-        maskedCode: generated.maskedCode,
-        fullCode: generated.formattedCode,
-        role: 'user',
-        status: 'active',
-        displayName: newName,
-        avatar: 'eagle',
-        createdAt: nowIso,
-        firstLoginAt: null,
-        accessActivatedAt: nowIso,
-        lastLoginAt: null,
-        accessPolicy: createAccessPolicyPreset('full'),
-        stats: {
-          totalXp: 100,
-          totalPoints: 200,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          correctAnswers: 0,
-          totalAnswers: 0,
-          accuracyPercent: 100,
-          currentStreak: 0,
-          bestStreak: 0,
-          rank: db.users.length + 1,
-          country: 'Shqipëri',
-          school: 'MITO',
-          watchedSecondsToday: 0,
-          gameSessionsToday: 0,
-          lastActivityDate: nowIso.slice(0, 10),
-        },
-        achievements: ['ach_first_explore'],
-        likedShortIds: [],
-        savedContentIds: [],
-        recentActivity: [],
-      };
-      db.users.push(newUser);
-      syncLeaderboardForUser(newUser);
-      return {
-        executed: true,
-        summarySq: `✨ Veprim i kryer nga MITO: U krijua llogaria e re për **"${newName}"** me Akses të Plotë dhe kodin e hyrjes: **${generated.formattedCode}**!`,
-      };
-    }
-
-    return { executed: false, summarySq: '' };
-  };
-
-  // Deterministic natural-language command parser so commands like "Nxirre mac nga llogarija ime"
-  // ALWAYS execute immediately even before/without Gemini API!
-  const detectAndRunNaturalLanguageMitoCommand = (
-    db: ReturnType<typeof store.getState>,
-    caller: UserAccount,
-    userMessage: string,
-    currentSessionId?: string
-  ): MitoExecutedActionResult => {
-    const lower = userMessage.toLowerCase();
-
-    // Detect device keyword in user message
-    const deviceKeywords = ['macbook', 'mac', 'iphone', 'ipad', 'ios', 'samsung', 'android', 'linux', 'windows', 'chrome', 'safari', 'desktop'];
-    const foundDeviceKw = deviceKeywords.find((kw) => lower.includes(kw));
-
-    // Kick / remove / stop specific device or other devices
-    const hasKickVerb =
-      lower.includes('nxirr') ||
-      lower.includes('nxirre') ||
-      lower.includes('hiq') ||
-      lower.includes('hiqe') ||
-      lower.includes('ndalo') ||
-      lower.includes('mbyll') ||
-      lower.includes('shkëput') ||
-      lower.includes('shkeput') ||
-      lower.includes('log out') ||
-      lower.includes('logout') ||
-      lower.includes('kick');
-
-    const hasBanVerb =
-      lower.includes('blloko') ||
-      lower.includes('ban') ||
-      lower.includes('mos e lejo');
-
-    const hasUnbanVerb =
-      lower.includes('zhblloko') ||
-      lower.includes('unban') ||
-      lower.includes('hiq bllokimin');
-
-    if (hasUnbanVerb) {
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        'unban_device',
-        { deviceKeyword: foundDeviceKw, userMessage },
-        currentSessionId
-      );
-    }
-
-    if (hasBanVerb && (foundDeviceKw || lower.includes('pajisj') || lower.includes('sesion'))) {
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        'ban_device',
-        { deviceKeyword: foundDeviceKw, userMessage },
-        currentSessionId
-      );
-    }
-
-    if (hasKickVerb && (foundDeviceKw || lower.includes('pajisj') || lower.includes('sesion') || lower.includes('llogari'))) {
-      if (foundDeviceKw) {
-        return executeMitoSuperAgentAction(
-          db,
-          caller,
-          'kick_specific_device',
-          { deviceKeyword: foundDeviceKw, userMessage },
-          currentSessionId
-        );
-      }
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        'logout_other_devices',
-        { userMessage },
-        currentSessionId
-      );
-    }
-
-    // Regenerate or change access code
-    if (
-      lower.includes('ndërro kod') ||
-      lower.includes('nderro kod') ||
-      lower.includes('ndrysho kod') ||
-      lower.includes('rigjenero kod') ||
-      lower.includes('kod të ri') ||
-      lower.includes('kod te ri') ||
-      lower.includes('gjenero kod')
-    ) {
-      const codeMatch = userMessage.match(/\b(\d{3}[-\s]?\d{3}[-\s]?\d{3})\b/);
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        codeMatch ? 'set_code' : 'regenerate_code',
-        { newValue: codeMatch ? codeMatch[1] : undefined, userMessage },
-        currentSessionId
-      );
-    }
-
-    // Change name
-    const nameMatch =
-      userMessage.match(/ndrysho\s+emrin(?:\s+tim|\s+e\s+\w+)?\s+n[ëe]\s+["']?([^"'\n.!?]+)["']?/i) ||
-      userMessage.match(/quhem\s+["']?([^"'\n.!?]+)["']?\s+ndryshoje/i);
-    if (nameMatch && nameMatch[1]) {
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        'update_account',
-        { newValue: nameMatch[1].trim(), userMessage },
-        currentSessionId
-      );
-    }
-
-    // Add XP or Points
-    const xpMatch = userMessage.match(/(?:shto|jep|bëj|bej|add)\s+(\d+)\s*(?:xp|pik[ëe])/i);
-    if (xpMatch && xpMatch[1]) {
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        'update_stats',
-        { numericValue: Number(xpMatch[1]), userMessage },
-        currentSessionId
-      );
-    }
-
-    // Create new user
-    const createMatch = userMessage.match(/krijo\s+(?:një\s+|nje\s+)?(?:llogari|përdorues|perdorues)(?:\s+për|\s+per|\s+me\s+emrin)?\s+["']?([A-Za-zÇçËë\s]{3,35})["']?/i);
-    if (createMatch && createMatch[1]) {
-      return executeMitoSuperAgentAction(
-        db,
-        caller,
-        'create_user',
-        { newValue: createMatch[1].trim(), userMessage },
-        currentSessionId
-      );
     }
 
     return { executed: false, summarySq: '' };
@@ -5484,289 +5173,125 @@ ${leaderboardSummary}`;
     history: SupportChatMessage[],
     currentSessionId?: string
   ): Promise<{ replyText: string; suggestHumanEscalation: boolean }> => {
-    const lower = userMessage.toLowerCase();
-
-    const wantsExplicitHuman =
-      lower.includes('agjent njerëzor') ||
-      lower.includes('agjent njerezor') ||
-      lower.includes('flas me nje njeri') ||
-      lower.includes('flas me një njeri') ||
-      lower.includes('flas me njeri') ||
-      lower.includes('person real') ||
-      lower.includes('dua të flas me një agjent') ||
-      lower.includes('dua te flas me nje agjent') ||
-      lower.includes('talk to a human') ||
-      lower.includes('human agent');
-
-    // Step 1: Execute any direct natural-language command immediately so it takes effect before building context
-    const preExecuted = detectAndRunNaturalLanguageMitoCommand(
-      db,
-      user,
-      userMessage,
-      currentSessionId
-    );
-
-    const platformContext = buildFullPlatformContextForSupportAi(db, user, currentSessionId);
     const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+      throw new Error('GEMINI_API_KEY is not configured on the server.');
+    }
 
-    if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build',
-            },
-          },
-        });
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
 
-        const recentTranscript = history
-          .slice(-10)
-          .map((m) => `${m.senderRole.toUpperCase()} (${m.senderName}): ${m.text}`)
-          .join('\n');
+    const platformContext = buildUserSafeContextForSupportAi(db, user, currentSessionId);
 
-        const systemInstruction = `Ti quhesh "MITO". Ti je Super-Agjenti Zyrtar Inteligjent i platformës shqiptare "MITO — Legjenda · Histori · Lojëra", me AKSES DHE KONTROLL TOTAL mbi çdo të dhënë të platformës, llogarinë e përdoruesit, llogarinë e Super Adminit, pajisjet aktive, kodet e hyrjes, filmin BESA dhe kuizet.
+    const recentTranscript = history
+      .slice(-12)
+      .map((m) => `${m.senderRole.toUpperCase()} (${m.senderName}): ${m.text}`)
+      .join('\n');
 
-RREGULLAT E TUA KRYERORE:
-1. Prezantohu dhe fol gjithmonë si "MITO" në gjuhën shqipe. Ti di gjithçka brenda platformës dhe bën gjithçka për të ndihmuar përdoruesin ose Super Adminin.
-2. MOS e refero te një agjent tjetër njerëzor përveç rastit kur përdoruesi thotë shprehimisht "Dua të flas me një Agjent Njerëzor". Vendos "escalateToHuman": false për çdo pyetje apo kërkesë!
-3. Ti mund të ndërhysh direkt në llogarinë e përdoruesit OSE të Super Adminit duke kthyer në JSON fushën "actionType" (nëse veprimi nuk është kryer ende tek EXECUTED_ACTION_RESULT):
-   - "kick_specific_device" (me "deviceKeyword" p.sh. "mac", "iphone", "chrome", "linux") për të nxjerrë jashtë një pajisje specifike.
-   - "ban_device" (me "deviceKeyword") për të bllokuar përgjithmonë një pajisje.
-   - "unban_device" (me "deviceKeyword") për të hequr bllokimin e një pajisjeje.
-   - "logout_other_devices" për të nxjerrë jashtë të gjitha pajisjet e tjera.
-   - "regenerate_code" ose "set_code" (me "newValue" nëse kërkohet kod specifik) për të rigjeneruar/ndryshuar kodin e përdoruesit ose të Super Adminit.
-   - "update_account" (me "newValue" për emrin e ri ose statusin "active"/"suspended").
-   - "update_stats" (me "numericValue" për të shtuar XP dhe pikë).
-   - "create_user" (me "newValue" emrin e përdoruesit të ri).
-   - "none" nëse pyetja është informative ose veprimi sapo u krye në EXECUTED_ACTION_RESULT.
-${preExecuted.executed ? `\n=== VEPRIMI QË SAPO U EKZEKUTUA NË DATABAZË NGA MITO ===\n${preExecuted.summarySq}\nKonfirmoje qartë këtë veprim në përgjigjen tënde (replyText) dhe vendos actionType="none".` : ''}
+    const systemInstruction = `Ti je "MITO", Asistenti Zyrtar AI i Mbështetjes në platformën shqiptare "MITO — Legjenda · Histori · Lojëra".
+
+RREGULLAT E TUA TË DETYRUESHME:
+1. Përgjigju gjithmonë natyrshëm, me mirësjellje dhe qartë në gjuhën shqipe si një inteligjencë artificiale e vërtetë.
+2. SIGURIA DHE ANTI-MASHTRIMI (SHUMË E RËNDËSISHME):
+   - KURRË mos jep përgjigjet e sakta të pyetjeve të kuizit BESA dhe mos e ndihmo përdoruesin të kopjojë në kuiz. Inkurajoje të shikojë filmin BESA dhe të fitojë pikët me meritë.
+   - KURRË mos shto dhe mos premto shtim falas të pikëve apo XP-ve (pikët dhe XP fitohen vetëm duke parë filmin dhe duke zgjidhur kuizin).
+   - KURRË mos fshi filma, mos ndrysho përmbajtjen e platformës dhe mos ndërhyj në llogaritë e përdoruesve të tjerë apo të administratorit.
+3. VEPRIMET E LEJUARA NË LLOGARINË E PËRDORUESIT AKTUAL:
+   Ti mund të kryesh vetëm këto veprime të sigurta të mbështetjes për llogarinë e vetë përdoruesit që po të shkruan, duke vendosur fushën "actionType" në JSON:
+   - "kick_specific_device" (me "deviceKeyword" p.sh. "mac", "iphone", "chrome", "safari", "windows") kur përdoruesi të kërkon të heqësh/nxjerrësh jashtë një pajisje nga llogaria e tij.
+   - "ban_device" (me "deviceKeyword") kur përdoruesi të kërkon të bllokojë një pajisje të panjohur në llogarinë e tij.
+   - "unban_device" (me "deviceKeyword") kur përdoruesi të kërkon të zhbllokojë një pajisje të tij.
+   - "logout_other_devices" kur përdoruesi të kërkon të mbyllë të gjitha pajisjet e tjera të lidhura në llogarinë e tij.
+   - "regenerate_code" kur përdoruesi të kërkon të rigjenerojë kodin e hyrjes së llogarisë së tij.
+   - "update_display_name" (me "newValue" emrin e ri) kur përdoruesi të kërkon të ndryshojë emrin e profilit të tij.
+   - "none" për çdo bisedë apo pyetje tjetër.
+4. KALIMI TE AGJENTI NJERËZOR (SUPER ADMIN):
+   - Nëse përdoruesi kërkon të flasë me një njeri real, agjent njerëzor, suport njerëzor ose Super Admin (ose ka një problem që kërkon ndërhyrjen e një njeriu), vendos "escalateToHuman": true. Përndryshe vendos "escalateToHuman": false.
 
 ${platformContext}`;
 
-        const response = await Promise.race([
-          ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: `Historiku i bisedës:\n${recentTranscript}\n\nMESAZHI I PËRDORUESIT: ${userMessage}`,
-            config: {
-              systemInstruction,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  replyText: {
-                    type: Type.STRING,
-                    description: 'Përgjigjja e plotë, e saktë dhe e detajuar në shqip nga Super-Agjenti MITO.',
-                  },
-                  actionType: {
-                    type: Type.STRING,
-                    description: 'Një nga: "none", "kick_specific_device", "ban_device", "unban_device", "logout_other_devices", "regenerate_code", "set_code", "update_account", "update_stats", "create_user".',
-                  },
-                  targetUserQuery: {
-                    type: Type.STRING,
-                    description: 'Emri ose roli i llogarisë ku duhet kryer veprimi (ose bosh për përdoruesin aktual).',
-                  },
-                  deviceKeyword: {
-                    type: Type.STRING,
-                    description: 'Fjala kyçe e pajisjes p.sh. "mac", "iphone", "chrome" nëse po hiqet/bllokohet një pajisje.',
-                  },
-                  newValue: {
-                    type: Type.STRING,
-                    description: 'Vlera e re (emri i ri, kodi i ri, etj.) nëse po ndryshohet ose krijohet diçka.',
-                  },
-                  numericValue: {
-                    type: Type.NUMBER,
-                    description: 'Vlera numerike (p.sh. XP për t’u shtuar) nëse actionType është "update_stats".',
-                  },
-                  escalateToHuman: {
-                    type: Type.BOOLEAN,
-                    description: 'Vendos true VETËM nëse përdoruesi kërkon shprehimisht një njeri real.',
-                  },
-                },
-                required: ['replyText', 'actionType', 'escalateToHuman'],
-              },
-            },
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Gemini timeout after 4500ms')), 4500)
-          ),
-        ]);
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        replyText: {
+          type: Type.STRING,
+          description: 'Përgjigjja jote e natyrshme në gjuhën shqipe si MITO AI.',
+        },
+        actionType: {
+          type: Type.STRING,
+          description:
+            'Një nga: "none", "kick_specific_device", "ban_device", "unban_device", "logout_other_devices", "regenerate_code", "update_display_name".',
+        },
+        deviceKeyword: {
+          type: Type.STRING,
+          description: 'Fjala kyçe e pajisjes (p.sh. "mac", "iphone", "chrome") nëse po hiqet ose bllokohet një pajisje.',
+        },
+        newValue: {
+          type: Type.STRING,
+          description: 'Emri i ri i profilit nëse actionType është "update_display_name".',
+        },
+        escalateToHuman: {
+          type: Type.BOOLEAN,
+          description: 'Vendos true nëse përdoruesi kërkon të flasë me një agjent njerëzor / Super Admin.',
+        },
+      },
+      required: ['replyText', 'actionType', 'escalateToHuman'],
+    };
 
-        const rawJson = (response.text || '').trim();
-        if (rawJson) {
-          const parsed = JSON.parse(rawJson) as {
-            replyText?: string;
-            actionType?: string;
-            targetUserQuery?: string;
-            deviceKeyword?: string;
-            newValue?: string;
-            numericValue?: number;
-            escalateToHuman?: boolean;
-          };
-          let finalReply = (parsed.replyText || '').trim();
+    const callModel = async (modelName: string) =>
+      ai.models.generateContent({
+        model: modelName,
+        contents: `Historiku i bisedës:\n${recentTranscript}\n\nMESAZHI I FUNDIT I PËRDORUESIT: ${userMessage}`,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema,
+        },
+      });
 
-          if (!preExecuted.executed && parsed.actionType && parsed.actionType !== 'none') {
-            const geminiActionRes = executeMitoSuperAgentAction(
-              db,
-              user,
-              parsed.actionType,
-              {
-                targetUserQuery: parsed.targetUserQuery,
-                deviceKeyword: parsed.deviceKeyword,
-                newValue: parsed.newValue,
-                numericValue: parsed.numericValue,
-                userMessage,
-              },
-              currentSessionId
-            );
-            if (geminiActionRes.executed && geminiActionRes.summarySq) {
-              finalReply += `\n\n${geminiActionRes.summarySq}`;
-            }
-          } else if (
-            preExecuted.executed &&
-            preExecuted.summarySq &&
-            !finalReply.includes('Veprim i kryer')
-          ) {
-            finalReply += `\n\n${preExecuted.summarySq}`;
-          }
+    let response;
+    try {
+      response = await callModel('gemini-4-argon');
+    } catch {
+      response = await callModel('gemini-3.8-flash');
+    }
 
-          if (finalReply) {
-            return {
-              replyText: finalReply,
-              suggestHumanEscalation: Boolean(parsed.escalateToHuman) && wantsExplicitHuman,
-            };
-          }
-        }
-      } catch (err) {
-        console.error('MITO Gemini call error, using built-in MITO Super-Agent responder:', err);
+    const rawJson = (response.text || '').trim();
+    const parsed = JSON.parse(rawJson) as {
+      replyText?: string;
+      actionType?: string;
+      deviceKeyword?: string;
+      newValue?: string;
+      escalateToHuman?: boolean;
+    };
+
+    let finalReply = (parsed.replyText || '').trim();
+
+    if (parsed.actionType && parsed.actionType !== 'none') {
+      const actionRes = executeMitoSupportAction(
+        db,
+        user,
+        parsed.actionType,
+        {
+          deviceKeyword: parsed.deviceKeyword,
+          newValue: parsed.newValue,
+        },
+        currentSessionId
+      );
+      if (actionRes.executed && actionRes.summarySq) {
+        finalReply = finalReply ? `${finalReply}\n\n${actionRes.summarySq}` : actionRes.summarySq;
       }
     }
 
-    // Built-in MITO Super-Agent Responder (100% functional even without external API key!)
-    if (wantsExplicitHuman) {
-      return {
-        replyText: `Unë jam MITO, Super-Agjenti i platformës. Meqenëse kërkuat shprehimisht një Agjent Njerëzor, po njoftoj menjëherë Super Adminin në këtë bisedë! Ndërkohë, mund të më kërkoni çdo gjë dhe unë mund ta kryej direkt për ju.`,
-        suggestHumanEscalation: true,
-      };
-    }
-
-    if (preExecuted.executed) {
-      const remainingSessions = (db.activeSessions || []).filter(
-        (s) => s.userId === user.uid && !s.revoked
-      );
-      const activeList =
-        remainingSessions.length > 0
-          ? remainingSessions
-              .map(
-                (s, i) =>
-                  `${i + 1}) ${s.deviceLabel || 'Shfletues Web'} (IP: ${s.ipAddress}${currentSessionId && s.sessionId === currentSessionId ? ' — Pajisja juaj aktuale' : ''})`
-              )
-              .join('; ')
-          : 'Vetëm pajisja juaj aktuale';
-      return {
-        replyText: `Jam MITO, Super-Agjenti i platformës! E kryva menjëherë kërkesën tuaj:\n\n${preExecuted.summarySq}\n\n📱 Pajisjet që mbeten aktive tani në llogarinë tuaj (${user.fullCode || user.maskedCode}): ${activeList}.\nMund të më kërkoni çdo ndryshim tjetër në llogarinë tuaj ose të Super Adminit!`,
-        suggestHumanEscalation: false,
-      };
-    }
-
-    const userSessions = (db.activeSessions || []).filter(
-      (s) => s.userId === user.uid && !s.revoked
-    );
-
-    // Answer questions about all users / Super Admin account / platform overview
-    if (
-      lower.includes('super admin') ||
-      lower.includes('perdorues') ||
-      lower.includes('përdorues') ||
-      lower.includes('llogarit') ||
-      lower.includes('kush ka llogari') ||
-      lower.includes('gjitha te dhenat') ||
-      lower.includes('gjitha të dhënat')
-    ) {
-      const usersList = db.users
-        .map(
-          (u, idx) =>
-            `${idx + 1}) **${u.displayName}** (${u.role === 'super_admin' ? 'Super Admin' : 'Përdorues'}) — Kodi: \`${u.fullCode || u.maskedCode}\`, Statusi: ${u.status}, ${u.stats?.totalXp || 0} XP`
-        )
-        .join('\n');
-      return {
-        replyText: `Jam **MITO**, Super-Agjenti me akses të plotë në platformë! Ja gjendja live e të gjitha llogarive në sistem (${db.users.length} llogari):\n\n${usersList}\n\nMund të më kërkoni të ndryshoj kodin, emrin, pikët/XP, ose të nxjerr jashtë e të bllokoj çdo pajisje në cilëndo prej këtyre llogarive!`,
-        suggestHumanEscalation: false,
-      };
-    }
-
-    // Answer questions about active devices & sessions
-    if (
-      lower.includes('pajisje') ||
-      lower.includes('device') ||
-      lower.includes('sesion') ||
-      lower.includes('mac') ||
-      lower.includes('iphone') ||
-      lower.includes('samsung') ||
-      lower.includes('kush eshte') ||
-      lower.includes('kush është')
-    ) {
-      const devicesList =
-        userSessions.length > 0
-          ? userSessions
-              .map(
-                (s, i) =>
-                  `${i + 1}) **${s.deviceLabel || 'Shfletues Web'}** (IP: ${s.ipAddress}${currentSessionId && s.sessionId === currentSessionId ? ' — Pajisja juaj aktuale' : ''})`
-              )
-              .join('\n')
-          : '1) Vetëm pajisja juaj aktuale';
-
-      return {
-        replyText: `Jam **MITO**! Kontrollova në kohë reale sesionet aktive në llogarinë e **${user.displayName}** (Kodi: \`${user.fullCode || user.maskedCode}\`). Aktualisht janë aktive **${userSessions.length || 1} pajisje**:\n\n${devicesList}\n\nNëse dëshironi të nxirrni jashtë ose të bllokoni ndonjë pajisje (p.sh. shkruani *"Nxirre Mac nga llogaria ime"* ose *"Mbyll pajisjet e tjera"*) ose të rigjeneroni kodin (*"Rigjenero kodin tim"*), unë e ekzekutoj në çast!`,
-        suggestHumanEscalation: false,
-      };
-    }
-
-    // Answer questions about the BESA film & player
-    if (
-      lower.includes('video') ||
-      lower.includes('film') ||
-      lower.includes('besa') ||
-      lower.includes('full screen') ||
-      lower.includes('fullscreen') ||
-      lower.includes('ekran') ||
-      lower.includes('drive')
-    ) {
-      const besaFilm = db.content.find((c) => c.publicationStatus === 'published');
-      const userProg = db.playbackProgress.find(
-        (p) => p.userId === user.uid && p.contentId === besaFilm?.contentId
-      );
-      return {
-        replyText: `Jam **MITO**! Filmi i platformës është **"${besaFilm?.title || 'BESA Short Film Higgsfield Global Film Festival Nominee OLL KORRECT (824p)'}"** (Kohëzgjatja: **10 minuta e 31 sekonda**, Rezolucioni: **1920x824**, në seksionin **Legjendat**, sinkronizuar nga Google Drive *MITO content*). Progresi juaj i shikimit është **${userProg?.completionPercent || 0}%**. Player-i ka butonin **Fullscreen** poshtë-djathtas dhe kuizet janë të hapura me 0% detyrim shikimi!`,
-        suggestHumanEscalation: false,
-      };
-    }
-
-    // Answer questions about quizzes, answers, XP, leaderboard, or code
-    if (
-      lower.includes('kuiz') ||
-      lower.includes('loj') ||
-      lower.includes('pyetj') ||
-      lower.includes('pergjigj') ||
-      lower.includes('përgjigj') ||
-      lower.includes('xp') ||
-      lower.includes('pik') ||
-      lower.includes('renditj') ||
-      lower.includes('kod')
-    ) {
-      const quizAnswers = (db.gameQuestions || [])
-        .slice(0, 5)
-        .map((q, i) => `${i + 1}) ${q.questionText} → **${q.choices[q.correctChoiceIndex]}**`)
-        .join('\n');
-      return {
-        replyText: `Jam **MITO**! Ja të dhënat e plota për llogarinë tuaj (**${user.displayName}**) dhe kuizet:\n• **Kodi juaj i plotë**: \`${user.fullCode || user.maskedCode}\`\n• **Statistikat**: **${user.stats?.totalXp || 0} XP**, **${user.stats?.totalPoints || 0} Pikë**, Vendi **#${user.stats?.rank || 1}** në Renditjen Kombëtare (${user.stats?.gamesPlayed || 0} kuice të luajtura).\n• **Përgjigjet e sakta të Kuizit BESA**:\n${quizAnswers}\n\nMund të më kërkoni t'ju shtoj XP (p.sh. *"Shto 500 XP"*), të ndryshoj kodin ose të menaxhoj pajisjet tuaja!`,
-        suggestHumanEscalation: false,
-      };
-    }
-
     return {
-      replyText: `Përshëndetje **${user.displayName}**! Unë jam **MITO**, Super-Agjenti AI me akses të plotë mbi të gjithë platformën dhe llogarinë tuaj (\`${user.fullCode || user.maskedCode}\`).\n\nMund të më pyesni për çdo gjë ose të më urdhëroni të kryej veprime direkte në llogarinë tuaj apo të Super Adminit:\n• *"Cilat pajisje janë aktive në llogarinë time?"*\n• *"Nxirre Mac nga llogaria ime"* ose *"Mbyll pajisjet e tjera"*\n• *"Rigjenero kodin tim"* ose *"Ndrysho emrin tim në ..."*\n• *"Shto 500 XP"* ose *"Cilat janë përgjigjet e kuizit BESA?"*\nÇfarë dëshironi të bëj për ju tani?`,
-      suggestHumanEscalation: false,
+      replyText: finalReply,
+      suggestHumanEscalation: Boolean(parsed.escalateToHuman),
     };
   };
 
@@ -5781,7 +5306,7 @@ ${platformContext}`;
       status: 'ai_active',
       createdAt: nowIso,
       updatedAt: nowIso,
-      lastMessagePreview: 'MITO është gati t’ju ndihmojë.',
+      lastMessagePreview: 'MITO AI është gati t’ju ndihmojë.',
       unreadByAdmin: 0,
       unreadByUser: 0,
       messages: [
@@ -5790,7 +5315,7 @@ ${platformContext}`;
           ticketId: `preview_${user.uid}`,
           senderRole: 'ai',
           senderName: 'MITO',
-          text: `Përshëndetje ${user.displayName}! Unë jam MITO, Super-Agjenti i platformës me akses të plotë mbi çdo të dhënë, film, kuiz, pajisje dhe llogari (përfshirë llogarinë tuaj dhe të Super Adminit). Mund t'ju përgjigjem për gjithçka dhe të kryej ndryshime direkte për ju — si heqja/bllokimi i pajisjeve aktive, rigjenerimi i kodit të hyrjes, apo përditësimi i llogarisë. Si mund t'ju ndihmoj sot?`,
+          text: `Përshëndetje ${user.displayName}! Unë jam MITO, asistenti juaj inteligjent i mbështetjes. Mund t'ju ndihmoj me llogarinë tuaj, pajisjet e lidhura, kodin e hyrjes, apo çdo pyetje rreth platformës dhe filmit BESA. Gjithashtu, në çdo moment mund të kërkoni të flisni me një Agjent Njerëzor. Si mund t'ju ndihmoj sot?`,
           timestamp: nowIso,
           createdAt: nowIso,
         },
@@ -5832,7 +5357,6 @@ ${platformContext}`;
       store.commit();
     }
 
-    // Ensure all AI messages display senderName as 'MITO'
     for (const t of validTickets) {
       for (const m of t.messages || []) {
         if (m.senderRole === 'ai') {
@@ -5873,7 +5397,7 @@ ${platformContext}`;
             ticketId,
             senderRole: 'ai',
             senderName: 'MITO',
-            text: `Përshëndetje ${user.displayName}! Unë jam MITO, Super-Agjenti i platformës me akses të plotë mbi çdo të dhënë, film, kuiz, pajisje dhe llogari (përfshirë llogarinë tuaj dhe të Super Adminit). Mund t'ju përgjigjem për gjithçka dhe të kryej ndryshime direkte për ju — si heqja/bllokimi i pajisjeve aktive, rigjenerimi i kodit të hyrjes, apo përditësimi i llogarisë. Si mund t'ju ndihmoj sot?`,
+            text: `Përshëndetje ${user.displayName}! Unë jam MITO, asistenti juaj inteligjent i mbështetjes. Mund t'ju ndihmoj me llogarinë tuaj, pajisjet e lidhura, kodin e hyrjes, apo çdo pyetje rreth platformës dhe filmit BESA. Gjithashtu, në çdo moment mund të kërkoni të flisni me një Agjent Njerëzor. Si mund t'ju ndihmoj sot?`,
             timestamp: nowIso,
             createdAt: nowIso,
           },
@@ -5891,36 +5415,8 @@ ${platformContext}`;
     const activeTickets = getCleanActiveSupportTickets(db);
     const existing = activeTickets.find((t) => t.userId === req.user!.uid);
     if (existing) {
-      let dirty = false;
       if ((existing.unreadByUser || 0) > 0) {
         existing.unreadByUser = 0;
-        dirty = true;
-      }
-      // If the last message in the ticket was a user message that didn't get an AI reply yet, generate MITO's reply right now!
-      const lastMsg = existing.messages[existing.messages.length - 1];
-      if (lastMsg && lastMsg.senderRole === 'user') {
-        const aiResult = await generateSupportAiResponse(
-          db,
-          req.user!,
-          lastMsg.text,
-          existing.messages,
-          req.sessionId
-        );
-        const aiNowIso = new Date().toISOString();
-        existing.messages.push({
-          messageId: `msg_ai_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-          ticketId: existing.ticketId,
-          senderRole: 'ai',
-          senderName: 'MITO',
-          text: aiResult.replyText,
-          timestamp: aiNowIso,
-          createdAt: aiNowIso,
-        });
-        existing.updatedAt = aiNowIso;
-        existing.lastMessagePreview = aiResult.replyText.slice(0, 120);
-        dirty = true;
-      }
-      if (dirty) {
         await store.commitAsync();
       }
       res.json({ ticket: existing });
@@ -5952,62 +5448,125 @@ ${platformContext}`;
       createdAt: nowIso,
     };
 
+    // CRITICAL: When a human agent has been requested ('human_requested') or has joined the conversation ('human_active'),
+    // DO NOT let the AI speak in the chat! Only let AI speak if status === 'ai_active' (i.e. before human escalation or if Super Admin explicitly clicked "Kalo te AI").
+    if (initialTicket.status !== 'ai_active') {
+      initialTicket.messages.push(userMsg);
+      initialTicket.updatedAt = nowIso;
+      initialTicket.lastMessagePreview = text.slice(0, 120);
+      initialTicket.unreadByAdmin = (initialTicket.unreadByAdmin || 0) + 1;
+
+      await store.commitAsync();
+      broadcastSupportUpdate({
+        event: 'user_message_for_human',
+        ticketId: initialTicket.ticketId,
+        userId: user.uid,
+      });
+      res.json({ ticket: initialTicket });
+      return;
+    }
+
     const historyForAi = [...(initialTicket.messages || []), userMsg];
 
-    // MITO Super-Agent ALWAYS responds to every user message in chat!
-    const aiResult = await generateSupportAiResponse(
-      db,
-      user,
-      text,
-      historyForAi,
-      req.sessionId
-    );
+    try {
+      const aiResult = await generateSupportAiResponse(
+        db,
+        user,
+        text,
+        historyForAi,
+        req.sessionId
+      );
 
-    const aiNowIso = new Date().toISOString();
-    const aiMsg: SupportChatMessage = {
-      messageId: `msg_ai_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-      ticketId: targetTicketId,
-      senderRole: 'ai',
-      senderName: 'MITO',
-      text: aiResult.replyText,
-      timestamp: aiNowIso,
-      createdAt: aiNowIso,
-    };
+      const aiNowIso = new Date().toISOString();
+      const aiMsg: SupportChatMessage = {
+        messageId: `msg_ai_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        ticketId: targetTicketId,
+        senderRole: 'ai',
+        senderName: 'MITO',
+        text: aiResult.replyText,
+        timestamp: aiNowIso,
+        createdAt: aiNowIso,
+      };
 
-    // Re-acquire live ticket reference from store.getState() after async AI call so concurrent syncFromCloud() never detaches it
-    const liveDb = store.getState();
-    let liveTicket = (liveDb.supportTickets || []).find((t) => t.ticketId === targetTicketId);
-    if (!liveTicket) {
-      liveTicket = getOrCreateSupportTicketForUser(liveDb, user);
-    }
+      const liveDb = store.getState();
+      let liveTicket = (liveDb.supportTickets || []).find((t) => t.ticketId === targetTicketId);
+      if (!liveTicket) {
+        liveTicket = getOrCreateSupportTicketForUser(liveDb, user);
+      }
 
-    if (!liveTicket.messages.some((m) => m.messageId === userMsg.messageId)) {
-      liveTicket.messages.push(userMsg);
-    }
-    liveTicket.messages.push(aiMsg);
-    liveTicket.updatedAt = aiNowIso;
-    liveTicket.lastMessagePreview = aiResult.replyText.slice(0, 120);
-    liveTicket.unreadByAdmin = (liveTicket.unreadByAdmin || 0) + 1;
+      if (!liveTicket.messages.some((m) => m.messageId === userMsg.messageId)) {
+        liveTicket.messages.push(userMsg);
+      }
 
-    if (aiResult.suggestHumanEscalation) {
-      liveTicket.status = 'human_requested';
+      // Double-check that a human didn't take over while the AI call was in flight
+      if (liveTicket.status === 'ai_active') {
+        liveTicket.messages.push(aiMsg);
+        liveTicket.updatedAt = aiNowIso;
+        liveTicket.lastMessagePreview = aiResult.replyText.slice(0, 120);
+        liveTicket.unreadByAdmin = (liveTicket.unreadByAdmin || 0) + 1;
+
+        if (aiResult.suggestHumanEscalation) {
+          liveTicket.status = 'human_requested';
+          liveTicket.messages.push({
+            messageId: `msg_sys_${Date.now()}`,
+            ticketId: liveTicket.ticketId,
+            senderRole: 'system',
+            senderName: 'Sistemi MITO',
+            text: 'Biseda u kalua te Agjenti Njerëzor (Super Admin). Asistenti AI u largua nga biseda.',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } else {
+        liveTicket.updatedAt = nowIso;
+        liveTicket.lastMessagePreview = text.slice(0, 120);
+        liveTicket.unreadByAdmin = (liveTicket.unreadByAdmin || 0) + 1;
+      }
+
+      await store.commitAsync();
+      broadcastSupportUpdate({
+        event: 'message_completed',
+        ticketId: liveTicket.ticketId,
+        userId: user.uid,
+      });
+      res.json({ ticket: liveTicket });
+    } catch (err: any) {
+      console.error('Gemini AI error in /api/support/message:', err);
+      const liveDb = store.getState();
+      let liveTicket = (liveDb.supportTickets || []).find((t) => t.ticketId === targetTicketId);
+      if (!liveTicket) {
+        liveTicket = getOrCreateSupportTicketForUser(liveDb, user);
+      }
+      if (!liveTicket.messages.some((m) => m.messageId === userMsg.messageId)) {
+        liveTicket.messages.push(userMsg);
+      }
+      const errMsgStr = String(err?.message || '');
+      const isBillingOrQuota =
+        err?.status === 402 ||
+        err?.status === 429 ||
+        errMsgStr.includes('402') ||
+        errMsgStr.includes('prepayment credits');
+
       liveTicket.messages.push({
         messageId: `msg_sys_${Date.now()}`,
         ticketId: liveTicket.ticketId,
         senderRole: 'system',
-        senderName: 'MITO',
-        text: 'MITO njoftoi gjithashtu Agjentin Njerëzor (Super Admin) për këtë bisedë.',
+        senderName: 'Sistemi MITO',
+        text: isBillingOrQuota
+          ? 'API e Gemini ktheu kodin 402 (Kreditet e projektit në Google AI Studio janë shteruar). Ju lutemi vendosni një çelës aktiv GEMINI_API_KEY te Settings > Secrets ose shtypni "Kërko Agjent Njerëzor" për të folur direkt me Super Adminin.'
+          : 'Lidhja me Gemini API dështoi përkohësisht. Ju lutemi provoni përsëri ose shtypni "Kërko Agjent Njerëzor" për të folur me Super Adminin.',
         createdAt: new Date().toISOString(),
       });
+      liveTicket.updatedAt = nowIso;
+      liveTicket.lastMessagePreview = text.slice(0, 120);
+      liveTicket.unreadByAdmin = (liveTicket.unreadByAdmin || 0) + 1;
+      await store.commitAsync();
+      broadcastSupportUpdate({
+        event: 'message_completed',
+        ticketId: liveTicket.ticketId,
+        userId: user.uid,
+      });
+      res.json({ ticket: liveTicket });
     }
-
-    await store.commitAsync();
-    broadcastSupportUpdate({
-      event: 'message_completed',
-      ticketId: liveTicket.ticketId,
-      userId: user.uid,
-    });
-    res.json({ ticket: liveTicket });
   });
 
   app.post('/api/support/request-human', requireAuth, async (req: AuthenticatedRequest, res) => {

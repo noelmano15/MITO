@@ -23,8 +23,7 @@ const QUICK_TOPICS = [
   'Cilat pajisje janë aktive në llogarinë time?',
   'Nxirre Mac nga llogaria ime',
   'Rigjenero kodin tim të hyrjes pa më nxjerrë nga llogaria',
-  'Shto 500 XP në llogarinë time',
-  'Cilat janë përgjigjet e kuizit BESA?',
+  'Kam nevojë për ndihmë me filmin BESA',
   'Dua të flas me një Agjent Njerëzor',
 ];
 
@@ -197,7 +196,7 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold">
           <UserCheck className="w-3.5 h-3.5" />
-          <span>MITO + Agjent Njerëzor në Linjë</span>
+          <span>Agjent Njerëzor në Linjë</span>
         </span>
       );
     }
@@ -205,7 +204,7 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold">
           <Clock className="w-3.5 h-3.5" />
-          <span>MITO Aktiv · Në pritje të Agjentit</span>
+          <span>Në pritje të Agjentit Njerëzor</span>
         </span>
       );
     }
@@ -220,7 +219,7 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
     return (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#641C2B]/40 border border-[#C8A66A]/40 text-[#C8A66A] text-xs font-semibold">
         <Sparkles className="w-3.5 h-3.5" />
-        <span>MITO · Super-Agjent Aktiv</span>
+        <span>MITO · AI Asistent (Gemini)</span>
       </span>
     );
   };
@@ -241,10 +240,10 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
           <div>
             <h1 className="text-lg sm:text-2xl font-serif-heritage font-bold text-[#F4F0E8] flex items-center gap-2">
               <Headphones className="w-5 h-5 text-[#C8A66A]" />
-              <span>MITO · Super-Agjent & Live Support</span>
+              <span>Qendra e Ndihmës · MITO Support</span>
             </h1>
             <p className="text-xs text-[#F4F0E8]/65">
-              Agjenti MITO ka akses të plotë në platformë dhe mund të ndërhyjë direkt në llogarinë tuaj ose të Super Adminit
+              Asistencë inteligjente me Gemini AI për sigurinë e llogarisë suaj ose bisedë me Agjentin Njerëzor
             </p>
           </div>
         </div>
@@ -263,13 +262,13 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
         </div>
       </div>
 
-      {/* Security / Direct Intervention Banner */}
+      {/* Security / Unknown Device Banner */}
       <div className="mb-4 p-3.5 rounded-2xl bg-[#141418] border border-[#C8A66A]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-[#C8A66A] shrink-0 mt-0.5" />
           <div className="text-xs text-[#F4F0E8]/80 leading-relaxed">
-            <span className="font-semibold text-[#C8A66A]">MITO Super-Agjent:</span>{' '}
-            Kërkojini direkt t&apos;ju nxjerrë ose bllokojë çdo pajisje (p.sh. &ldquo;Nxirre Mac nga llogaria ime&rdquo;), të rigjenerojë ose ndryshojë kodin 9-shifror, të përditësojë llogarinë e përdoruesit ose të Super Adminit, ose t&apos;ju përgjigjet për çdo të dhënë të platformës.
+            <span className="font-semibold text-[#C8A66A]">Siguria e Llogarisë Suaj:</span>{' '}
+            Nuk njihni një pajisje në llogarinë tuaj? Kërkojini asistentit <strong>MITO</strong> ta nxjerrë jashtë apo ta bllokojë pajisjen e panjohur dhe t&apos;ju rigjenerojë kodin e hyrjes, ose klikoni <strong>Kërko Agjent Njerëzor</strong> për të folur direkt me Super Adminin.
           </div>
         </div>
 
@@ -369,14 +368,14 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
               );
             })
           )}
-          {sending && (
+          {sending && (!ticket || ticket.status === 'ai_active') && (
             <div className="flex flex-col items-start">
               <div className="flex items-center gap-1.5 mb-1 px-1">
                 <Bot className="w-3.5 h-3.5 text-[#C8A66A] animate-pulse" />
                 <span className="text-[11px] font-semibold text-[#C8A66A]">MITO</span>
               </div>
               <div className="rounded-2xl rounded-bl-sm px-4 py-2.5 text-xs text-[#C8A66A] bg-[#0B0B0D] border border-[#C8A66A]/30 animate-pulse">
-                MITO po analizon dhe po vepron në platformë...
+                MITO (Gemini AI) po shkruan...
               </div>
             </div>
           )}
@@ -395,7 +394,11 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
             type="text"
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
-            placeholder="Shkruani çdo pyetje ose komandë për agjentin MITO..."
+            placeholder={
+              ticket?.status === 'human_active' || ticket?.status === 'human_requested'
+                ? 'Shkruani mesazhin për Agjentin Njerëzor (Super Admin)...'
+                : 'Shkruani pyetjen ose kërkesën tuaj për MITO AI...'
+            }
             className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#141418] border border-[#202024] focus:border-[#C8A66A] text-sm text-[#F4F0E8] placeholder-[#F4F0E8]/40 focus:outline-none"
           />
           <button
