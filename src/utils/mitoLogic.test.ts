@@ -21,6 +21,7 @@ import {
   evaluateNewAchievements,
   sortLeaderboardEntries,
 } from './gameScoring';
+import { formatCinemaTitle } from './displayTitle';
 import type { UserAccount, VideoContent, GameItem } from '../types/mito';
 
 test('Access code formatting and cryptographic verification work accurately', () => {
@@ -185,4 +186,14 @@ test('Server-authoritative quiz scoring and leaderboard sorting work accurately'
   assert.equal(lateSubmission.pointsEarned, 0);
   assert.equal(lateSubmission.newStreak, 0);
   assert.equal(lateSubmission.timedOut, true);
+});
+
+test('Cinema title formatter splits festival metadata from monumental film titles cleanly', () => {
+  const besa = formatCinemaTitle('BESA Short Film Higgsfield Global Film Festival Nominee - OLL KORRECT (824p)');
+  assert.equal(besa.primaryTitle, 'BESA');
+  assert.equal(besa.subtitle, 'Higgsfield Global Film Festival Nominee · OLL KORRECT');
+
+  const shortTitle = formatCinemaTitle('MITO fushatë promocionale');
+  assert.equal(shortTitle.primaryTitle, 'MITO fushatë promocionale');
+  assert.equal(shortTitle.subtitle, null);
 });

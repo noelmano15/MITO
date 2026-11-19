@@ -366,7 +366,11 @@ class MitoStore {
     }
     this.lastCloudSyncMs = now;
     try {
-      const snap = await getDoc(CLOUD_DOC_REF);
+      const snap = await Promise.race([
+        getDoc(CLOUD_DOC_REF),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]);
+      if (!snap) return;
       if (!snap.exists()) {
         if (this.data.users.length > 0 || this.data.content.length > 0) {
           this.initialSyncDone = true;

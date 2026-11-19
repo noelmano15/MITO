@@ -38,6 +38,8 @@ import type {
 export default function App() {
   const [showStartupIntro, setShowStartupIntro] = useState<boolean>(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autostart') === '1') return false;
       if (window.location.pathname.startsWith('/watch/')) return false;
       return sessionStorage.getItem('mito_intro_seen_session') !== '1';
     } catch {
@@ -54,6 +56,7 @@ export default function App() {
   const activeBuildIdRef = useRef<string | null>(null);
 
   // User Catalog State
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [standardVideos, setStandardVideos] = useState<VideoContent[]>([]);
   const [shortVideos, setShortVideos] = useState<VideoContent[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -105,6 +108,8 @@ export default function App() {
       setGames(data.games || []);
     } catch {
       // Ignore network error during initial load or server update
+    } finally {
+      setCatalogLoaded(true);
     }
   }, []);
 
@@ -293,10 +298,17 @@ export default function App() {
   // =========================================================
   if (currentPath === '/access-expired') {
     return (
-      <div className="min-h-screen bg-[#0B0B0D] text-[#F4F0E8] flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full p-8 rounded-2xl bg-[#141418] border border-[#641C2B] text-center space-y-5 shadow-2xl">
+      <div className="min-h-screen bg-[#09090C] text-[#F4F0E8] flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0 mito-aura-drift"
+          style={{
+            background:
+              'radial-gradient(circle at 50% 40%, rgba(100, 28, 43, 0.3) 0%, rgba(200, 166, 106, 0.06) 40%, transparent 72%)',
+          }}
+        />
+        <div className="relative z-10 max-w-md w-full p-8 rounded-3xl mito-surface-gold text-center space-y-5 mito-reveal">
           <BrandLogo variant="emblem" size="md" className="mx-auto" />
-          <ShieldAlert className="w-12 h-12 text-[#C8A66A] mx-auto" />
+          <ShieldAlert className="w-11 h-11 text-[#C8A66A] mx-auto" />
           <h1 className="text-2xl font-serif-heritage font-bold text-[#F4F0E8]">
             Sesioni yt ka përfunduar.
           </h1>
@@ -310,7 +322,7 @@ export default function App() {
               setExpiredReasonSq(null);
               navigate('/login');
             }}
-            className="w-full py-3.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 flex items-center justify-center gap-2 mito-cta-primary cursor-pointer"
           >
             <span>Kthehu në Hyrje</span>
             <ArrowRight className="w-4 h-4 text-[#C8A66A]" />
@@ -322,9 +334,15 @@ export default function App() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-[#0B0B0D] text-[#F4F0E8] flex flex-col items-center justify-center gap-4">
-        <BrandLogo variant="emblem" size="md" />
-        <div className="text-xs font-mono-code tracking-widest text-[#C8A66A] uppercase">
+      <div className="min-h-screen bg-[#09090C] text-[#F4F0E8] flex flex-col items-center justify-center gap-5 relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: 'radial-gradient(circle at 50% 50%, rgba(100,28,43,0.22) 0%, transparent 65%)',
+          }}
+        />
+        <BrandLogo variant="emblem" size="md" className="relative z-10 mito-float-subtle" />
+        <div className="relative z-10 text-xs font-mono-code tracking-[0.28em] text-[#C8A66A] uppercase">
           MITO · LEGJENDA · HISTORI · LOJËRA
         </div>
       </div>
@@ -563,6 +581,7 @@ export default function App() {
         progressList={progressList}
         games={games}
         user={user}
+        catalogLoading={!catalogLoaded}
         filterCategoryType={null}
         onNavigate={navigate}
         onRefreshCatalog={fetchCatalog}
@@ -570,15 +589,21 @@ export default function App() {
     );
   }
 
+  const isFullScreenShorts = currentPath === '/shorts';
+
   return (
-    <div className="min-h-screen bg-[#0B0B0D] text-[#F4F0E8] flex flex-col">
-      <MainNavbar
-        user={user}
-        currentPath={currentPath}
-        onNavigate={navigate}
-        onLogout={handleLogout}
-      />
-      <div className="flex-1">{mainView}</div>
+    <div className="min-h-screen bg-[#09090C] text-[#F4F0E8] flex flex-col relative">
+      {!isFullScreenShorts && (
+        <MainNavbar
+          user={user}
+          currentPath={currentPath}
+          onNavigate={navigate}
+          onLogout={handleLogout}
+        />
+      )}
+      <div key={currentPath} className="flex-1 mito-fade-in">
+        {mainView}
+      </div>
     </div>
   );
 }

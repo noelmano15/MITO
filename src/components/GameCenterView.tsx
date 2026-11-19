@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   Play,
   Plus,
-  Sparkles,
 } from 'lucide-react';
 import { apiFetch } from '../utils/sessionToken';
 import type { GameItem, GameQuestionPublic, UserAccount, VideoContent } from '../types/mito';
@@ -67,6 +66,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
   const [questions, setQuestions] = useState<GameQuestionPublic[]>([]);
   const [currentQIdx, setCurrentQIdx] = useState(0);
   const [timeLeft, setTimeLeft] = useState(20);
+  const [questionMaxTime, setQuestionMaxTime] = useState(20);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [answerFeedback, setAnswerFeedback] = useState<{
     isCorrect: boolean;
@@ -135,10 +135,12 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
         return;
       }
 
+      const qTime = data.questions?.[0]?.timeLimitSeconds || activeGame.timePerQuestionSeconds || 20;
       setSessionId(data.sessionId);
       setQuestions(data.questions || []);
       setCurrentQIdx(0);
-      setTimeLeft(data.questions?.[0]?.timeLimitSeconds || activeGame.timePerQuestionSeconds || 20);
+      setQuestionMaxTime(qTime);
+      setTimeLeft(qTime);
       setSelectedChoice(null);
       setAnswerFeedback(null);
       setTotalScore(0);
@@ -196,10 +198,12 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
       document.body.dataset.state = 'gameover';
       return;
     }
+    const qTime = questions[nextIdx]?.timeLimitSeconds || activeGame?.timePerQuestionSeconds || 20;
     setCurrentQIdx(nextIdx);
     setSelectedChoice(null);
     setAnswerFeedback(null);
-    setTimeLeft(questions[nextIdx]?.timeLimitSeconds || activeGame?.timePerQuestionSeconds || 20);
+    setQuestionMaxTime(qTime);
+    setTimeLeft(qTime);
   };
 
   const handleCreateMultiplayerRoom = async () => {
@@ -229,13 +233,14 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
   if (selectedGameId && activeGame) {
     const currentQuestion = questions[currentQIdx];
     const isUnlocked = unlockStatus ? unlockStatus.unlocked : true;
+    const timerRatio = Math.max(0, Math.min(1, timeLeft / Math.max(1, questionMaxTime)));
 
     return (
-      <div className="max-w-4xl mx-auto px-4 lg:px-8 py-8 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 lg:px-8 py-6 sm:py-10 space-y-6 safe-main-content">
         <button
           type="button"
           onClick={() => onNavigate('/games')}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-[#C8A66A] hover:underline cursor-pointer"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-[#C8A66A] hover:text-[#E4C88E] transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Kthehu në Qendrën e Lojërave</span>
@@ -243,36 +248,33 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
 
         {/* STATE 1: GAME TITLE & MODE MENU */}
         {sessionState === 'menu' && (
-          <div className="p-8 rounded-2xl bg-[#141418] border border-[#C8A66A]/35 space-y-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-2 max-w-2xl">
-                <div className="text-xs text-[#C8A66A] flex items-center gap-2">
-                  <span>{GAME_TYPE_LABELS[activeGame.gameType] || activeGame.gameType}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>Vështirësia: {activeGame.difficulty}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-mono-code">{activeGame.questionCount} pyetje</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-mono-code">+{activeGame.xpReward} XP</span>
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-serif-heritage font-bold text-[#F4F0E8]">
-                  {activeGame.title}
-                </h1>
-                <p className="text-sm text-[#F4F0E8]/75 leading-relaxed">
-                  {activeGame.description}
-                </p>
-                <p className="text-xs text-[#F4F0E8]/55">
-                  Udhëzime: {activeGame.instructions}
-                </p>
-              </div>
+          <div className="p-6 sm:p-9 rounded-3xl mito-surface-gold space-y-7 mito-reveal">
+            <div className="space-y-2.5 max-w-2xl">
+              <p className="text-[11px] font-mono-code uppercase tracking-wider sm:tracking-[0.2em] text-[#C8A66A] flex flex-wrap items-center gap-2">
+                <span>{GAME_TYPE_LABELS[activeGame.gameType] || activeGame.gameType}</span>
+                <span aria-hidden="true">·</span>
+                <span>Vështirësia: {activeGame.difficulty}</span>
+                <span aria-hidden="true">·</span>
+                <span>{activeGame.questionCount} pyetje</span>
+                <span aria-hidden="true">·</span>
+                <span>+{activeGame.xpReward} XP</span>
+              </p>
+              <h1 className="text-2xl sm:text-4xl font-serif-heritage font-bold text-[#F4F0E8]">
+                {activeGame.title}
+              </h1>
+              <p className="text-sm text-[#F4F0E8]/75 leading-relaxed">
+                {activeGame.description}
+              </p>
+              <p className="text-xs text-[#F4F0E8]/55">
+                Udhëzime: {activeGame.instructions}
+              </p>
             </div>
 
-            {/* Watch-to-Unlock Requirement Banner */}
             {activeGame.requireWatchToUnlock && linkedContent && (
               <div
-                className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-4 ${
+                className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-4 ${
                   isUnlocked
-                    ? 'bg-emerald-950/30 border-emerald-500/40'
+                    ? 'bg-emerald-950/25 border-emerald-500/40'
                     : 'bg-[#641C2B]/25 border-[#C8A66A]/50'
                 }`}
               >
@@ -290,7 +292,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                     </p>
                     {!isUnlocked && (
                       <p className="text-[#F4F0E8]/70 mt-0.5">
-                        Progresi aktual i verifikuar: {unlockStatus?.currentPercent || 0}% (Mbeten edhe {unlockStatus?.remainingPercent || 80}%).
+                        Progresi aktual: {unlockStatus?.currentPercent || 0}% (Mbeten edhe {unlockStatus?.remainingPercent || 80}%).
                       </p>
                     )}
                   </div>
@@ -300,7 +302,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onNavigate(`/watch/${linkedContent.contentId}`)}
-                    className="px-4 py-2 rounded-lg bg-[#C8A66A] text-[#0B0B0D] text-xs font-semibold cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-[#C8A66A] text-[#09090C] text-xs font-semibold cursor-pointer"
                   >
                     Shiko Videon Tani →
                   </button>
@@ -311,29 +313,29 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
             {errorSq && (
               <div
                 role="alert"
-                className="p-3.5 rounded-xl bg-[#641C2B]/30 border border-[#641C2B] text-xs text-[#F4F0E8]"
+                className="p-3.5 rounded-xl bg-[#641C2B]/35 border border-[#8B243B] text-xs text-[#F4F0E8]"
               >
                 {errorSq}
               </div>
             )}
 
-            {/* Game Modes: Solo, Local Multiplayer (Phone as Controller), Global Challenge */}
+            {/* Game Modes: Solo, Party TV+Phone, Global Challenge */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               <button
                 type="button"
                 data-start="true"
                 disabled={!isUnlocked}
                 onClick={() => handleStartSolo(false)}
-                className="p-5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] disabled:opacity-40 border border-[#C8A66A]/45 text-left space-y-2 transition-colors cursor-pointer"
+                className="p-5 sm:p-6 rounded-2xl bg-[#641C2B] hover:bg-[#7D2336] disabled:opacity-40 border border-[#C8A66A]/50 text-left space-y-2.5 mito-cta-primary cursor-pointer"
               >
                 <div className="flex items-center justify-between">
                   <Play className="w-5 h-5 text-[#C8A66A] fill-current" />
-                  <span className="text-[11px] font-mono-code text-[#C8A66A]">SOLO MODE</span>
+                  <span className="text-[11px] font-mono-code text-[#E4C88E]">SOLO MODE</span>
                 </div>
                 <h2 className="text-base font-serif-heritage font-bold text-[#F4F0E8]">
                   Luaj Vetëm
                 </h2>
-                <p className="text-xs text-[#F4F0E8]/75">
+                <p className="text-xs text-[#F4F0E8]/75 leading-relaxed">
                   Konkuro në pajisjen tënde aktuale dhe fito pikë e XP.
                 </p>
               </button>
@@ -342,7 +344,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                 type="button"
                 disabled={!isUnlocked || creatingRoom}
                 onClick={handleCreateMultiplayerRoom}
-                className="p-5 rounded-xl bg-[#0B0B0D] hover:bg-[#202024] disabled:opacity-40 border border-[#C8A66A]/40 text-left space-y-2 transition-colors cursor-pointer"
+                className="p-5 sm:p-6 rounded-2xl bg-[#09090C]/80 hover:bg-white/[0.06] disabled:opacity-40 border border-[#C8A66A]/35 text-left space-y-2.5 mito-card-hover cursor-pointer"
               >
                 <div className="flex items-center justify-between">
                   <Users className="w-5 h-5 text-[#C8A66A]" />
@@ -351,7 +353,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                 <h2 className="text-base font-serif-heritage font-bold text-[#F4F0E8]">
                   Luaj me Miqtë (TV + Telefon)
                 </h2>
-                <p className="text-xs text-[#F4F0E8]/70">
+                <p className="text-xs text-[#F4F0E8]/70 leading-relaxed">
                   Krijo dhomë me kod QR; miqtë përgjigjen nga telefonat si kontrollerë.
                 </p>
               </button>
@@ -360,7 +362,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                 type="button"
                 disabled={!isUnlocked}
                 onClick={() => handleStartSolo(true)}
-                className="p-5 rounded-xl bg-[#0B0B0D] hover:bg-[#202024] disabled:opacity-40 border border-[#202024] hover:border-[#C8A66A]/40 text-left space-y-2 transition-colors cursor-pointer"
+                className="p-5 sm:p-6 rounded-2xl bg-[#09090C]/80 hover:bg-white/[0.06] disabled:opacity-40 border border-white/[0.1] text-left space-y-2.5 mito-card-hover cursor-pointer"
               >
                 <div className="flex items-center justify-between">
                   <Globe className="w-5 h-5 text-[#C8A66A]" />
@@ -369,8 +371,8 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                 <h2 className="text-base font-serif-heritage font-bold text-[#F4F0E8]">
                   Sfidë Globale
                 </h2>
-                <p className="text-xs text-[#F4F0E8]/70">
-                  Ngjitu në renditjen ndërkombëtare me kodin tënd MITO.
+                <p className="text-xs text-[#F4F0E8]/70 leading-relaxed">
+                  Ngjitu në renditjen kombëtare dhe globale me kodin tënd MITO.
                 </p>
               </button>
             </div>
@@ -379,119 +381,143 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
 
         {/* STATE 2: ACTIVE QUESTION PLAY */}
         {sessionState === 'playing' && currentQuestion && (
-          <div className="p-6 lg:p-8 rounded-2xl bg-[#141418] border border-[#C8A66A]/40 space-y-6">
-            {/* HUD Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#202024]">
-              <div className="text-xs font-mono-code text-[#C8A66A]">
-                PYETJA {currentQIdx + 1} / {questions.length}
-              </div>
-
-              <div className="flex items-center gap-5 font-mono-code text-xs">
-                <div>
-                  <span className="text-[#F4F0E8]/55">PIKË: </span>
-                  <span className="text-base font-bold text-[#F4F0E8]">{totalScore}</span>
-                </div>
-                <div>
-                  <span className="text-[#F4F0E8]/55">SERIA: </span>
-                  <span className="text-base font-bold text-[#C8A66A]">{streak}x</span>
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#641C2B]/40 border border-[#C8A66A]/40 text-[#F4F0E8]">
-                  <Clock className="w-3.5 h-3.5 text-[#C8A66A]" />
-                  <span className="font-bold">{timeLeft}s</span>
-                </div>
-              </div>
+          <div className="rounded-3xl mito-surface-gold overflow-hidden mito-reveal">
+            {/* GPU-composited scaleX timer line */}
+            <div className="h-1.5 w-full bg-white/[0.06] overflow-hidden">
+              <div
+                className={`h-full w-full origin-left transition-transform duration-1000 linear ${
+                  timeLeft <= 5 ? 'bg-red-400' : 'bg-[#C8A66A]'
+                }`}
+                style={{ transform: `scaleX(${timerRatio})` }}
+              />
             </div>
 
-            {/* Question Text */}
-            <h2 className="text-xl sm:text-2xl font-serif-heritage font-bold text-[#F4F0E8]">
-              {currentQuestion.questionText}
-            </h2>
+            <div className="p-6 lg:p-8 space-y-6">
+              {/* HUD Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
+                <div className="text-xs font-mono-code text-[#C8A66A] tracking-wider">
+                  PYETJA {currentQIdx + 1} / {questions.length}
+                </div>
 
-            {/* Answer Choices */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {currentQuestion.choices.map((choiceText, idx) => {
-                const letter = ['A', 'B', 'C', 'D'][idx] || String(idx + 1);
-                let btnStyle = 'bg-[#0B0B0D] hover:bg-[#202024] border-[#202024] text-[#F4F0E8]';
-                if (answerFeedback) {
-                  if (idx === answerFeedback.correctChoiceIndex) {
-                    btnStyle = 'bg-emerald-950/60 border-emerald-500 text-emerald-200';
-                  } else if (idx === selectedChoice && !answerFeedback.isCorrect) {
-                    btnStyle = 'bg-red-950/60 border-red-500 text-red-200';
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    disabled={Boolean(answerFeedback)}
-                    onClick={() => handleAnswerSubmit(idx)}
-                    className={`p-4 rounded-xl border text-left flex items-center gap-3.5 transition-all cursor-pointer ${btnStyle}`}
-                  >
-                    <span className="w-8 h-8 rounded-lg bg-[#202024] border border-[#C8A66A]/35 flex items-center justify-center font-mono-code text-xs font-bold text-[#C8A66A] shrink-0">
-                      {letter}
+                <div className="flex items-center gap-5 font-mono-code text-xs">
+                  <div>
+                    <span className="text-[#F4F0E8]/55">PIKË: </span>
+                    <span className="text-base font-bold text-[#F4F0E8]">{totalScore}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#F4F0E8]/55">SERIA: </span>
+                    <span className="text-base font-bold text-[#C8A66A]">{streak}x</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 text-[#F4F0E8]">
+                    <Clock className={`w-3.5 h-3.5 ${timeLeft <= 5 ? 'text-red-400' : 'text-[#C8A66A]'}`} />
+                    <span className={`font-bold text-base ${timeLeft <= 5 ? 'text-red-400' : 'text-[#F4F0E8]'}`}>
+                      {timeLeft}s
                     </span>
-                    <span className="text-sm font-medium">{choiceText}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Server-Validated Feedback & Next Button */}
-            {answerFeedback && (
-              <div className="p-4 rounded-xl bg-[#0B0B0D] border border-[#C8A66A]/35 flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <p
-                    className={`text-sm font-bold ${
-                      answerFeedback.isCorrect ? 'text-emerald-400' : 'text-amber-400'
-                    }`}
-                  >
-                    {answerFeedback.isCorrect
-                      ? `Saktë! +${answerFeedback.pointsEarned} Pikë`
-                      : 'Përgjigje e pasaktë'}
-                  </p>
-                  {answerFeedback.explanation && (
-                    <p className="text-xs text-[#F4F0E8]/75">{answerFeedback.explanation}</p>
-                  )}
+                  </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleNextQuestion}
-                  className="px-5 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 cursor-pointer"
-                >
-                  {currentQIdx + 1 >= questions.length ? 'Shiko Rezultatin Final' : 'Pyetja Tjetër →'}
-                </button>
               </div>
-            )}
+
+              {/* Question Text */}
+              <h2 className="text-xl sm:text-2xl font-serif-heritage font-bold text-[#F4F0E8] leading-snug">
+                {currentQuestion.questionText}
+              </h2>
+
+              {/* Answer Choices */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {currentQuestion.choices.map((choiceText, idx) => {
+                  const letter = ['A', 'B', 'C', 'D'][idx] || String(idx + 1);
+                  let btnStyle =
+                    'bg-[#09090C]/85 hover:bg-white/[0.07] border-white/[0.09] hover:border-[#C8A66A]/45 text-[#F4F0E8]';
+                  if (answerFeedback) {
+                    if (idx === answerFeedback.correctChoiceIndex) {
+                      btnStyle = 'bg-emerald-950/65 border-emerald-400 text-emerald-100 shadow-[0_0_24px_-8px_rgba(52,211,153,0.45)]';
+                    } else if (idx === selectedChoice && !answerFeedback.isCorrect) {
+                      btnStyle = 'bg-red-950/65 border-red-400 text-red-100';
+                    } else {
+                      btnStyle = 'bg-[#09090C]/50 border-white/[0.05] text-[#F4F0E8]/50';
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={Boolean(answerFeedback)}
+                      onClick={() => handleAnswerSubmit(idx)}
+                      className={`min-h-[60px] p-4 rounded-2xl border text-left flex items-center gap-3.5 transition-all cursor-pointer active:scale-[0.985] ${btnStyle}`}
+                    >
+                      <span className="w-8 h-8 rounded-xl bg-white/[0.06] border border-[#C8A66A]/35 flex items-center justify-center font-mono-code text-xs font-bold text-[#C8A66A] shrink-0">
+                        {letter}
+                      </span>
+                      <span className="text-sm font-medium">{choiceText}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Server-Validated Feedback & Next Button */}
+              {answerFeedback && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#09090C]/90 border border-[#C8A66A]/35 flex flex-wrap items-center justify-between gap-4 mito-fade-in">
+                  <div className="space-y-1 max-w-xl">
+                    <p
+                      className={`text-sm font-bold ${
+                        answerFeedback.isCorrect ? 'text-emerald-400' : 'text-amber-400'
+                      }`}
+                    >
+                      {answerFeedback.isCorrect
+                        ? `Saktë! +${answerFeedback.pointsEarned} Pikë`
+                        : 'Përgjigje e pasaktë'}
+                    </p>
+                    {answerFeedback.explanation && (
+                      <p className="text-xs text-[#F4F0E8]/75 leading-relaxed">
+                        {answerFeedback.explanation}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleNextQuestion}
+                    className="min-h-[44px] px-5 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 mito-cta-primary cursor-pointer"
+                  >
+                    {currentQIdx + 1 >= questions.length ? 'Shiko Rezultatin Final' : 'Pyetja Tjetër →'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* STATE 3: VICTORY / GAME OVER SUMMARY MODAL */}
         {sessionState === 'gameover' && (
-          <div className="p-8 rounded-2xl bg-[#141418] border border-[#C8A66A] text-center space-y-6 max-w-xl mx-auto">
-            <Trophy className="w-12 h-12 text-[#C8A66A] mx-auto" />
+          <div className="p-8 sm:p-10 rounded-3xl mito-surface-gold text-center space-y-6 max-w-xl mx-auto mito-reveal">
+            <div className="w-16 h-16 rounded-full bg-[#641C2B]/40 border border-[#C8A66A] flex items-center justify-center mx-auto mito-float-subtle">
+              <Trophy className="w-8 h-8 text-[#C8A66A]" />
+            </div>
             <div>
-              <h2 className="text-2xl font-serif-heritage font-bold text-[#F4F0E8]">
+              <p className="text-[11px] font-mono-code uppercase tracking-[0.2em] text-[#C8A66A]">
+                RAPORTI FINAL
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-serif-heritage font-bold text-[#F4F0E8] mt-1">
                 Sfida Përfundoi!
               </h2>
               <p className="text-xs text-[#F4F0E8]/65 mt-1">{activeGame.title}</p>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-[#202024]">
+              <div className="p-4 rounded-2xl bg-[#09090C]/85 border border-white/[0.08]">
                 <div className="text-[11px] text-[#F4F0E8]/55">PIKË TOTALE</div>
                 <div className="text-xl font-mono-code font-bold text-[#C8A66A] mt-1">
                   {totalScore}
                 </div>
               </div>
-              <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-[#202024]">
+              <div className="p-4 rounded-2xl bg-[#09090C]/85 border border-white/[0.08]">
                 <div className="text-[11px] text-[#F4F0E8]/55">SAKTËSIA</div>
                 <div className="text-xl font-mono-code font-bold text-[#F4F0E8] mt-1">
                   {correctCount}/{questions.length}
                 </div>
               </div>
-              <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-[#202024]">
+              <div className="p-4 rounded-2xl bg-[#09090C]/85 border border-white/[0.08]">
                 <div className="text-[11px] text-[#F4F0E8]/55">XP FITUAR</div>
                 <div className="text-xl font-mono-code font-bold text-emerald-400 mt-1">
                   +{xpEarned} XP
@@ -504,14 +530,14 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                 type="button"
                 data-start="true"
                 onClick={() => handleStartSolo(false)}
-                className="px-6 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 cursor-pointer"
+                className="min-h-[46px] px-6 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 mito-cta-primary cursor-pointer"
               >
                 Luaj Përsëri
               </button>
               <button
                 type="button"
                 onClick={() => onNavigate('/leaderboard')}
-                className="px-5 py-2.5 rounded-xl bg-[#0B0B0D] hover:bg-[#202024] text-xs font-semibold text-[#C8A66A] border border-[#202024] cursor-pointer"
+                className="min-h-[46px] px-5 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-[#C8A66A] border border-white/[0.1] transition-colors cursor-pointer"
               >
                 Shiko Renditjen Globale
               </button>
@@ -529,22 +555,25 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
       : games.filter((g) => g.gameType === selectedTypeFilter);
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 lg:px-8 py-10 space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8 safe-main-content">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.07] pb-6 mito-reveal">
         <div>
-          <h1 className="text-3xl font-serif-heritage font-bold text-[#F4F0E8]">
+          <p className="text-[11px] font-mono-code uppercase tracking-[0.22em] text-[#C8A66A]">
+            ARENA E TRASHËGIMISË
+          </p>
+          <h1 className="text-2xl sm:text-4xl font-serif-heritage font-bold text-[#F4F0E8] mt-1">
             Qendra e Lojërave MITO
           </h1>
-          <p className="text-sm text-[#F4F0E8]/65 mt-1">
+          <p className="text-sm text-[#F4F0E8]/65 mt-1.5 max-w-2xl">
             Kuize interaktive, sfida të trashëgimisë dhe gara lokale me telefon si kontroller.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => onNavigate('/join')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#141418] hover:bg-[#202024] text-xs font-semibold text-[#C8A66A] border border-[#C8A66A]/35 cursor-pointer"
+            className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.09] text-xs font-semibold text-[#C8A66A] border border-[#C8A66A]/35 transition-colors cursor-pointer"
           >
             <Users className="w-4 h-4" />
             <span>Bashkohu me Kod Dhome</span>
@@ -554,7 +583,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
             <button
               type="button"
               onClick={() => onNavigate('/admin/games')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 cursor-pointer"
+              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 mito-cta-primary cursor-pointer"
             >
               <Plus className="w-4 h-4 text-[#C8A66A]" />
               <span>Krijo Lojë në Admin</span>
@@ -564,14 +593,14 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
       </div>
 
       {/* Game Type Filter Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
+      <div className="flex items-center gap-2 overflow-x-auto md:overflow-visible md:flex-wrap no-scrollbar pb-1">
         <button
           type="button"
           onClick={() => setSelectedTypeFilter('all')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap cursor-pointer ${
+          className={`min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
             selectedTypeFilter === 'all'
-              ? 'bg-[#641C2B] text-[#F4F0E8] border border-[#C8A66A]/40'
-              : 'bg-[#141418] text-[#F4F0E8]/70 hover:text-[#F4F0E8]'
+              ? 'bg-[#641C2B] text-[#F4F0E8] border border-[#C8A66A]/45'
+              : 'bg-white/[0.04] text-[#F4F0E8]/70 hover:text-[#F4F0E8] border border-white/[0.06]'
           }`}
         >
           Të gjitha lojërat
@@ -581,10 +610,10 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
             key={key}
             type="button"
             onClick={() => setSelectedTypeFilter(key)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap cursor-pointer ${
+            className={`min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
               selectedTypeFilter === key
-                ? 'bg-[#641C2B] text-[#F4F0E8] border border-[#C8A66A]/40'
-                : 'bg-[#141418] text-[#F4F0E8]/70 hover:text-[#F4F0E8]'
+                ? 'bg-[#641C2B] text-[#F4F0E8] border border-[#C8A66A]/45'
+                : 'bg-white/[0.04] text-[#F4F0E8]/70 hover:text-[#F4F0E8] border border-white/[0.06]'
             }`}
           >
             {label}
@@ -593,13 +622,13 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
       </div>
 
       {filteredGames.length === 0 ? (
-        <div className="p-12 rounded-2xl bg-[#141418] border border-[#202024] text-center max-w-xl mx-auto space-y-4">
+        <div className="p-12 rounded-3xl mito-surface-card text-center max-w-xl mx-auto space-y-4">
           <Gamepad2 className="w-10 h-10 text-[#C8A66A] mx-auto" />
           <h2 className="text-xl font-serif-heritage font-bold text-[#F4F0E8]">
-            Ende nuk ka lojëra të publikuara
+            Nuk ka lojëra në këtë kategori
           </h2>
           <p className="text-xs text-[#F4F0E8]/65">
-            Qendra e Lojërave popullohet kur Super Administratori krijon kuize dhe lojëra në Panelin e Administrimit.
+            Zgjidhni një kategori tjetër ose kthehuni te të gjitha lojërat e publikuara.
           </p>
         </div>
       ) : (
@@ -609,23 +638,25 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
             return (
               <div
                 key={game.gameId}
-                className="p-6 rounded-2xl bg-[#141418] border border-[#202024] hover:border-[#C8A66A]/45 flex flex-col justify-between gap-5 transition-colors"
+                className="p-6 rounded-3xl mito-surface-card mito-card-hover flex flex-col justify-between gap-5"
               >
                 <div className="space-y-2.5">
-                  <div className="text-xs text-[#C8A66A] flex items-center gap-1.5">
+                  <p className="text-[11px] font-mono-code uppercase tracking-wider text-[#C8A66A] flex flex-wrap items-center gap-1.5">
                     <span>{GAME_TYPE_LABELS[game.gameType] || game.gameType}</span>
                     <span aria-hidden="true">·</span>
                     <span>{game.difficulty}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="font-mono-code">+{game.xpReward} XP</span>
-                  </div>
+                    <span>+{game.xpReward} XP</span>
+                  </p>
                   <h2 className="text-lg font-serif-heritage font-bold text-[#F4F0E8]">
                     {game.title}
                   </h2>
-                  <p className="text-xs text-[#F4F0E8]/65 line-clamp-2">{game.description}</p>
+                  <p className="text-xs text-[#F4F0E8]/65 line-clamp-2 leading-relaxed">
+                    {game.description}
+                  </p>
                 </div>
 
-                <div className="pt-3 border-t border-[#202024] flex items-center justify-between">
+                <div className="pt-4 border-t border-white/[0.07] flex items-center justify-between gap-2">
                   <span className="text-xs flex items-center gap-1.5 text-[#F4F0E8]/75">
                     {unlocked ? (
                       <>
@@ -643,7 +674,7 @@ export const GameCenterView: React.FC<GameCenterViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onNavigate(`/games/${game.gameId}`)}
-                    className="px-4 py-2 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/40 cursor-pointer"
+                    className="min-h-[40px] px-4 py-2 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 mito-cta-primary cursor-pointer"
                   >
                     Hap Lojën →
                   </button>

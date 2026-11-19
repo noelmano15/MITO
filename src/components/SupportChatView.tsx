@@ -57,7 +57,6 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
   useEffect(() => {
     loadTicket(false);
 
-    // Ultra-fast 1s background refresh for real-time messaging on phone and web
     const interval = window.setInterval(() => {
       loadTicket(true);
     }, 1000);
@@ -70,7 +69,6 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-    // Real-time WebSocket push listener
     let ws: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let unmounted = false;
@@ -190,49 +188,49 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
     }
   };
 
-  const statusBadge = () => {
+  const statusIndicator = () => {
     const st = ticket?.status || 'ai_active';
     if (st === 'human_active') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-emerald-300 text-xs font-mono-code font-semibold">
           <UserCheck className="w-3.5 h-3.5" />
-          <span>Agjent Njerëzor në Linjë</span>
+          <span>AGJENT NJERËZOR NË LINJË</span>
         </span>
       );
     }
     if (st === 'human_requested') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-amber-300 text-xs font-mono-code font-semibold">
           <Clock className="w-3.5 h-3.5" />
-          <span>Në pritje të Agjentit Njerëzor</span>
+          <span>NË PRITJE TË AGJENTIT</span>
         </span>
       );
     }
     if (st === 'resolved') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#202024] border border-[#C8A66A]/35 text-[#C8A66A] text-xs font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-[#C8A66A] text-xs font-mono-code font-semibold">
           <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>E Zgjidhur</span>
+          <span>E ZGJIDHUR</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#641C2B]/40 border border-[#C8A66A]/40 text-[#C8A66A] text-xs font-semibold">
+      <span className="inline-flex items-center gap-1.5 text-[#C8A66A] text-xs font-mono-code font-semibold">
         <Sparkles className="w-3.5 h-3.5" />
-        <span>MITO · AI Asistent (Gemini)</span>
+        <span>MITO · GEMINI AI</span>
       </span>
     );
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8 safe-main-content">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 sm:py-8 safe-main-content space-y-4">
       {/* Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mito-reveal">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => onNavigate('/home')}
-            className="min-h-[44px] min-w-[44px] rounded-xl bg-[#141418] hover:bg-[#202024] border border-[#202024] flex items-center justify-center text-[#F4F0E8] cursor-pointer"
+            className="min-h-[44px] min-w-[44px] rounded-xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] flex items-center justify-center text-[#F4F0E8] transition-colors cursor-pointer"
             aria-label="Kthehu në Kreu"
           >
             <ArrowLeft className="w-5 h-5 text-[#C8A66A]" />
@@ -243,17 +241,17 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
               <span>Qendra e Ndihmës · MITO Support</span>
             </h1>
             <p className="text-xs text-[#F4F0E8]/65">
-              Asistencë inteligjente me Gemini AI për sigurinë e llogarisë suaj ose bisedë me Agjentin Njerëzor
+              Asistencë inteligjente me Gemini AI për sigurinë e llogarisë ose bisedë me Agjentin Njerëzor
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {statusBadge()}
+        <div className="flex items-center gap-3">
+          {statusIndicator()}
           <button
             type="button"
             onClick={() => loadTicket(false)}
-            className="min-h-[40px] px-3 rounded-xl bg-[#141418] hover:bg-[#202024] border border-[#202024] text-xs text-[#F4F0E8]/80 flex items-center gap-1.5 cursor-pointer"
+            className="min-h-[40px] px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] text-xs text-[#F4F0E8]/85 flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Rifresko bisedën"
           >
             <RefreshCw className="w-3.5 h-3.5 text-[#C8A66A]" />
@@ -263,12 +261,12 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
       </div>
 
       {/* Security / Unknown Device Banner */}
-      <div className="mb-4 p-3.5 rounded-2xl bg-[#141418] border border-[#C8A66A]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="p-4 rounded-2xl mito-surface-gold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mito-reveal-delay-1">
         <div className="flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-[#C8A66A] shrink-0 mt-0.5" />
           <div className="text-xs text-[#F4F0E8]/80 leading-relaxed">
             <span className="font-semibold text-[#C8A66A]">Siguria e Llogarisë Suaj:</span>{' '}
-            Nuk njihni një pajisje në llogarinë tuaj? Kërkojini asistentit <strong>MITO</strong> ta nxjerrë jashtë apo ta bllokojë pajisjen e panjohur dhe t&apos;ju rigjenerojë kodin e hyrjes, ose klikoni <strong>Kërko Agjent Njerëzor</strong> për të folur direkt me Super Adminin.
+            Nuk njihni një pajisje në llogarinë tuaj? Kërkojini asistentit <strong>MITO</strong> ta nxjerrë jashtë pajisjen e panjohur dhe t&apos;ju rigjenerojë kodin, ose klikoni <strong>Kërko Agjent Njerëzor</strong>.
           </div>
         </div>
 
@@ -277,7 +275,7 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
             type="button"
             disabled={escalating}
             onClick={handleRequestHuman}
-            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] border border-[#C8A66A]/50 text-xs font-semibold text-[#F4F0E8] flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-md"
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] border border-[#C8A66A]/50 text-xs font-semibold text-[#F4F0E8] flex items-center justify-center gap-2 shrink-0 mito-cta-primary cursor-pointer"
           >
             <UserCheck className="w-4 h-4 text-[#C8A66A]" />
             <span>{escalating ? 'Duke njoftuar...' : 'Kërko Agjent Njerëzor'}</span>
@@ -286,14 +284,14 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
       </div>
 
       {/* Quick Issue Topics */}
-      <div className="mb-4 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+      <div className="flex items-center gap-2 overflow-x-auto md:overflow-visible md:flex-wrap no-scrollbar pb-1 mito-reveal-delay-1">
         {QUICK_TOPICS.map((topic) => (
           <button
             key={topic}
             type="button"
             disabled={sending}
             onClick={() => handleSendMessage(topic)}
-            className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#141418] hover:bg-[#202024] border border-[#202024] hover:border-[#C8A66A]/45 text-xs text-[#F4F0E8]/90 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+            className="min-h-[40px] px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] hover:border-[#C8A66A]/45 text-xs text-[#F4F0E8]/90 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
           >
             {topic}
           </button>
@@ -301,12 +299,11 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
       </div>
 
       {/* Chat Container */}
-      <div className="bg-[#141418] border border-[#202024] rounded-2xl overflow-hidden flex flex-col h-[58vh] min-h-[380px] max-h-[600px] shadow-2xl">
-        {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+      <div className="mito-surface-card rounded-3xl overflow-hidden flex flex-col h-[58vh] min-h-[380px] max-h-[600px] mito-reveal-delay-2">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {loading && !ticket ? (
-            <div className="h-full flex items-center justify-center text-xs text-[#F4F0E8]/60">
-              Po hapet lidhja e sigurt me agjentin MITO...
+            <div className="h-full flex items-center justify-center text-xs font-mono-code text-[#C8A66A]">
+              Po hapet lidhja e sigurt me asistentin MITO...
             </div>
           ) : (
             (ticket?.messages || []).map((msg) => {
@@ -322,9 +319,9 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
               if (isSystem) {
                 return (
                   <div key={msg.messageId} className="flex justify-center my-2">
-                    <div className="px-3.5 py-1.5 rounded-xl bg-[#202024]/90 border border-[#C8A66A]/30 text-[11px] text-[#C8A66A] text-center max-w-md whitespace-pre-line">
+                    <p className="px-4 py-1.5 text-[11px] font-mono-code text-[#C8A66A] text-center max-w-md whitespace-pre-line">
                       {msg.text}
-                    </div>
+                    </p>
                   </div>
                 );
               }
@@ -335,14 +332,13 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
                   className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1 px-1">
-                    {!isUser && (
-                      isAgent ? (
+                    {!isUser &&
+                      (isAgent ? (
                         <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
                       ) : (
                         <Bot className="w-3.5 h-3.5 text-[#C8A66A]" />
-                      )
-                    )}
-                    <span className="text-[11px] font-semibold text-[#F4F0E8]/70">
+                      ))}
+                    <span className="text-[11px] font-semibold text-[#F4F0E8]/75">
                       {displaySender}
                     </span>
                     <span className="text-[10px] font-mono-code text-[#F4F0E8]/45">
@@ -359,7 +355,7 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
                         ? 'bg-[#641C2B] text-[#F4F0E8] border border-[#C8A66A]/40 rounded-br-sm'
                         : isAgent
                         ? 'bg-emerald-950/50 text-[#F4F0E8] border border-emerald-500/40 rounded-bl-sm'
-                        : 'bg-[#0B0B0D] text-[#F4F0E8]/95 border border-[#C8A66A]/25 rounded-bl-sm'
+                        : 'bg-[#09090C]/90 text-[#F4F0E8]/95 border border-[#C8A66A]/25 rounded-bl-sm'
                     }`}
                   >
                     {msg.text}
@@ -369,13 +365,13 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
             })
           )}
           {sending && (!ticket || ticket.status === 'ai_active') && (
-            <div className="flex flex-col items-start">
+            <div className="flex flex-col items-start mito-fade-in">
               <div className="flex items-center gap-1.5 mb-1 px-1">
-                <Bot className="w-3.5 h-3.5 text-[#C8A66A] animate-pulse" />
+                <Bot className="w-3.5 h-3.5 text-[#C8A66A]" />
                 <span className="text-[11px] font-semibold text-[#C8A66A]">MITO</span>
               </div>
-              <div className="rounded-2xl rounded-bl-sm px-4 py-2.5 text-xs text-[#C8A66A] bg-[#0B0B0D] border border-[#C8A66A]/30 animate-pulse">
-                MITO (Gemini AI) po shkruan...
+              <div className="rounded-2xl rounded-bl-sm px-4 py-2.5 text-xs text-[#C8A66A] bg-[#09090C]/90 border border-[#C8A66A]/30">
+                MITO (Gemini AI) po përgjigjet...
               </div>
             </div>
           )}
@@ -388,7 +384,7 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
             e.preventDefault();
             handleSendMessage();
           }}
-          className="p-3 sm:p-4 bg-[#0B0B0D] border-t border-[#202024] flex items-center gap-2.5"
+          className="p-3 sm:p-4 bg-[#09090C]/95 border-t border-white/[0.08] flex items-center gap-2.5"
         >
           <input
             type="text"
@@ -399,12 +395,12 @@ export const SupportChatView: React.FC<SupportChatViewProps> = ({ user, onNaviga
                 ? 'Shkruani mesazhin për Agjentin Njerëzor (Super Admin)...'
                 : 'Shkruani pyetjen ose kërkesën tuaj për MITO AI...'
             }
-            className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#141418] border border-[#202024] focus:border-[#C8A66A] text-sm text-[#F4F0E8] placeholder-[#F4F0E8]/40 focus:outline-none"
+            className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#111116] border border-white/[0.09] focus:border-[#C8A66A] text-sm text-[#F4F0E8] placeholder-[#F4F0E8]/35 focus:outline-none"
           />
           <button
             type="submit"
             disabled={sending || !messageText.trim()}
-            className="min-h-[48px] px-5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] disabled:opacity-50 text-sm font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            className="min-h-[48px] px-5 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] disabled:opacity-50 text-sm font-semibold text-[#F4F0E8] border border-[#C8A66A]/45 mito-cta-primary flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <Send className="w-4 h-4 text-[#C8A66A]" />
             <span className="hidden sm:inline">{sending ? 'Duke dërguar...' : 'Dërgo'}</span>

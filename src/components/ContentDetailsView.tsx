@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { apiFetch } from '../utils/sessionToken';
+import { formatCinemaTitle } from '../utils/displayTitle';
 import type {
   VideoContent,
   EpisodeItem,
@@ -109,8 +110,8 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-sm text-[#F4F0E8]/60">
-        Po ngarkohen detajet e përmbajtjes...
+      <div className="max-w-5xl mx-auto px-4 py-20 text-center text-sm text-[#C8A66A] font-mono-code">
+        Po ngarkohet dosja kulturore e përmbajtjes...
       </div>
     );
   }
@@ -118,7 +119,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
   if (errorSq || !content) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16">
-        <div className="p-8 rounded-2xl bg-[#141418] border border-[#641C2B] text-center space-y-4">
+        <div className="p-8 rounded-3xl mito-surface-gold text-center space-y-4">
           <AlertCircle className="w-10 h-10 text-[#C8A66A] mx-auto" />
           <h1 className="text-xl font-serif-heritage font-bold text-[#F4F0E8]">
             {errorSq || 'Përmbajtja nuk u gjet'}
@@ -126,7 +127,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
           <button
             type="button"
             onClick={() => onNavigate('/home')}
-            className="px-5 py-2.5 rounded-xl bg-[#202024] hover:bg-[#C8A66A] hover:text-[#0B0B0D] text-xs font-semibold text-[#F4F0E8] transition-colors cursor-pointer"
+            className="px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-[#C8A66A] hover:text-[#09090C] text-xs font-semibold text-[#F4F0E8] transition-colors cursor-pointer"
           >
             Kthehu në Kreu
           </button>
@@ -135,57 +136,67 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
     );
   }
 
+  const formattedTitle = formatCinemaTitle(content.title);
+
   return (
-    <div className="pb-20 space-y-10">
-      {/* Hero Banner */}
-      <section className="relative w-full min-h-[420px] flex items-end border-b border-[#202024]">
+    <div className="safe-main-content space-y-10">
+      {/* Museum Accession Hero Banner */}
+      <section className="relative w-full min-h-[420px] sm:min-h-[470px] flex items-end border-b border-white/[0.08] overflow-hidden">
         <img
           src={content.heroUrl || content.posterUrl}
           alt={content.title}
           referrerPolicy="no-referrer"
-          className="absolute inset-0 w-full h-full object-cover opacity-45"
+          className="absolute inset-0 w-full h-full object-cover opacity-45 mito-ken-burns"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0D] via-[#0B0B0D]/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#09090C] via-[#09090C]/75 to-[#09090C]/25" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#09090C]/90 via-[#09090C]/45 to-transparent" />
 
-        <div className="relative z-10 max-w-[1440px] w-full mx-auto px-4 lg:px-8 py-10 flex flex-col md:flex-row items-start md:items-end gap-8">
+        <div className="relative z-10 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-start md:items-end gap-8">
           <img
             src={content.posterUrl || content.thumbnailUrl}
             alt={content.title}
             referrerPolicy="no-referrer"
-            className="w-40 sm:w-48 aspect-[3/4] object-cover rounded-xl border border-[#C8A66A]/40 shadow-2xl shrink-0 hidden sm:block"
+            className="w-40 sm:w-48 aspect-[3/4] object-cover rounded-2xl border border-[#C8A66A]/45 shadow-2xl shrink-0 hidden sm:block mito-reveal"
           />
 
-          <div className="space-y-4 max-w-3xl">
+          <div className="space-y-4 max-w-3xl mito-reveal-delay-1">
             <button
               type="button"
               onClick={() => onNavigate('/home')}
-              className="inline-flex items-center gap-1.5 text-xs text-[#C8A66A] hover:underline cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#C8A66A] hover:text-[#E4C88E] transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Kthehu te Katalogu</span>
             </button>
 
-            <div className="text-xs text-[#C8A66A] flex flex-wrap items-center gap-2">
-              <span>{content.type.toUpperCase()}</span>
+            <p className="text-[11px] sm:text-xs font-mono-code uppercase tracking-[0.2em] text-[#C8A66A] flex flex-wrap items-center gap-2">
+              <span>{content.type}</span>
               <span aria-hidden="true">·</span>
               <span>{content.region || 'Shqipëri'}</span>
               <span aria-hidden="true">·</span>
-              <span className="font-mono-code">
+              <span>
                 {content.videoFormat === 'short'
                   ? `${content.durationSeconds}s (9:16)`
-                  : `${Math.max(1, Math.round(content.durationSeconds / 60))} min`}
+                  : `${Math.max(1, Math.round(content.durationSeconds / 60))} MIN`}
               </span>
               <span aria-hidden="true">·</span>
-              <span className="font-mono-code">{content.resolution}</span>
+              <span>{content.resolution}</span>
               <span aria-hidden="true">·</span>
-              <span className="font-mono-code">{content.codec}</span>
+              <span>{content.codec}</span>
+            </p>
+
+            <div>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif-heritage font-bold text-[#F4F0E8] leading-[1.04] tracking-[0.03em]">
+                {formattedTitle.primaryTitle}
+              </h1>
+              {formattedTitle.subtitle && (
+                <p className="mt-2 font-editorial italic text-base sm:text-xl text-[#E4C88E]/90">
+                  {formattedTitle.subtitle}
+                </p>
+              )}
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-serif-heritage font-bold text-[#F4F0E8]">
-              {content.title}
-            </h1>
-
-            <p className="text-sm sm:text-base text-[#F4F0E8]/85 leading-relaxed">
+            <p className="text-sm sm:text-base text-[#F4F0E8]/85 leading-relaxed max-w-2xl">
               {content.description || content.synopsis}
             </p>
 
@@ -199,7 +210,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
                       : `/watch/${content.contentId}`
                   )
                 }
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-sm font-semibold text-[#F4F0E8] border border-[#C8A66A]/50 transition-colors cursor-pointer"
+                className="min-h-[48px] inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-sm font-semibold text-[#F4F0E8] border border-[#C8A66A]/50 mito-cta-primary cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-current text-[#C8A66A]" />
                 <span>
@@ -213,7 +224,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onNavigate(`/content/${linkedContent.contentId}`)}
-                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#141418] hover:bg-[#202024] text-xs font-semibold text-[#C8A66A] border border-[#C8A66A]/35 transition-colors cursor-pointer"
+                  className="min-h-[48px] inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-[#C8A66A] border border-[#C8A66A]/35 transition-colors cursor-pointer"
                 >
                   <Film className="w-4 h-4" />
                   <span>Përmbajtja e Lidhur: {linkedContent.title}</span>
@@ -225,7 +236,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
                   type="button"
                   disabled={deleting}
                   onClick={handleDeleteCurrentContent}
-                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#641C2B]/40 hover:bg-[#641C2B] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/40 transition-colors cursor-pointer"
+                  className="min-h-[48px] inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#641C2B]/40 hover:bg-[#641C2B] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/40 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4 text-[#C8A66A]" />
                   <span>{deleting ? 'Duke fshirë...' : 'Fshi këtë Përmbajtje'}</span>
@@ -236,24 +247,23 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
         </div>
       </section>
 
-      <div className="max-w-[1440px] mx-auto px-4 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left 2 Columns: Watch-to-Unlock Games & Episodes */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Video Questionnaires & Linked Quizzes (0% Watch Requirement) */}
-          <section className="p-6 rounded-2xl bg-[#141418] border border-[#202024] space-y-4">
-            <div className="flex items-center justify-between gap-4">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left 2 Columns: Video Quiz & Episodes */}
+        <div className="lg:col-span-2 space-y-8 mito-reveal-delay-2">
+          <section className="p-6 sm:p-7 rounded-3xl mito-surface-card space-y-5">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.07] pb-4">
               <div>
-                <h2 className="text-lg font-serif-heritage font-bold text-[#F4F0E8] flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-serif-heritage font-bold text-[#F4F0E8] flex items-center gap-2">
                   <Gamepad2 className="w-5 h-5 text-[#C8A66A]" />
                   <span>Pyetësori & Kuizi i Videos</span>
                 </h2>
-                <p className="text-xs text-[#F4F0E8]/60 mt-0.5">
-                  Pyetësorët e lidhur me këtë film janë të hapur menjëherë — mund t&apos;i luani pa pasur nevojë të shikoni një pjesë të caktuar të videos.
+                <p className="text-xs text-[#F4F0E8]/65 mt-1 leading-relaxed">
+                  Pyetësorët e lidhur me këtë film janë të hapur menjëherë — mund t&apos;i luani në çdo moment.
                 </p>
               </div>
-              <div className="text-right font-mono-code text-xs text-emerald-400">
+              <span className="font-mono-code text-xs text-emerald-400">
                 I Hapur Menjëherë
-              </div>
+              </span>
             </div>
 
             {relatedGames.length === 0 ? (
@@ -265,22 +275,24 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
                 {relatedGames.map((game) => (
                   <div
                     key={game.gameId}
-                    className="p-4 rounded-xl bg-[#0B0B0D] border border-[#202024] flex flex-wrap items-center justify-between gap-4"
+                    className="p-4 sm:p-5 rounded-2xl bg-[#09090C]/80 border border-white/[0.07] hover:border-[#C8A66A]/40 transition-colors flex flex-wrap items-center justify-between gap-4"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        <h3 className="text-sm font-semibold text-[#F4F0E8]">{game.title}</h3>
+                        <h3 className="text-sm font-serif-heritage font-semibold text-[#F4F0E8]">
+                          {game.title}
+                        </h3>
                       </div>
-                      <p className="text-xs text-[#F4F0E8]/65">
-                        I gatshëm për t&apos;u luajtur ({game.questionCount} pyetje · +{game.xpReward} XP)
+                      <p className="text-xs font-mono-code text-[#C8A66A]">
+                        {game.questionCount} pyetje · +{game.xpReward} XP
                       </p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => onNavigate(`/games/${game.gameId}`)}
-                      className="px-4 py-2 rounded-lg bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/40 transition-colors cursor-pointer"
+                      className="min-h-[42px] px-4 py-2 rounded-xl bg-[#641C2B] hover:bg-[#7D2336] text-xs font-semibold text-[#F4F0E8] border border-[#C8A66A]/40 mito-cta-primary cursor-pointer"
                     >
                       Luaj Pyetësorin Tani
                     </button>
@@ -292,7 +304,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
 
           {/* Episodes List if Series */}
           {episodes.length > 0 && (
-            <section className="p-6 rounded-2xl bg-[#141418] border border-[#202024] space-y-4">
+            <section className="p-6 sm:p-7 rounded-3xl mito-surface-card space-y-4">
               <h2 className="text-lg font-serif-heritage font-bold text-[#F4F0E8]">
                 Episodet ({episodes.length})
               </h2>
@@ -300,7 +312,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
                 {episodes.map((ep) => (
                   <div
                     key={ep.episodeId}
-                    className="p-3.5 rounded-xl bg-[#0B0B0D] border border-[#202024] flex items-center justify-between gap-4"
+                    className="p-4 rounded-2xl bg-[#09090C]/80 border border-white/[0.07] flex items-center justify-between gap-4"
                   >
                     <div>
                       <p className="text-xs font-mono-code text-[#C8A66A]">
@@ -312,7 +324,7 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigate(`/watch/${content.contentId}`)}
-                      className="px-3.5 py-2 rounded-lg bg-[#202024] hover:bg-[#C8A66A] hover:text-[#0B0B0D] text-xs font-semibold text-[#C8A66A] cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-[#C8A66A] hover:text-[#09090C] text-xs font-semibold text-[#C8A66A] transition-colors cursor-pointer"
                     >
                       Luaj
                     </button>
@@ -323,16 +335,16 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
           )}
         </div>
 
-        {/* Right Column: Cultural Heritage Provenance */}
-        <aside className="p-6 rounded-2xl bg-[#141418] border border-[#202024] space-y-4 h-fit">
-          <div className="flex items-center gap-2 text-[#C8A66A]">
+        {/* Right Column: Museum Accession Provenance Table */}
+        <aside className="p-6 sm:p-7 rounded-3xl mito-surface-gold space-y-5 h-fit mito-reveal-delay-3">
+          <div className="flex items-center gap-2.5 text-[#C8A66A]">
             <BookOpen className="w-5 h-5" />
             <h2 className="text-base font-serif-heritage font-bold text-[#F4F0E8]">
               Provenienca e Trashëgimisë
             </h2>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#0B0B0D] border border-[#202024] text-xs text-[#F4F0E8]/80 flex items-start gap-2">
+          <div className="p-3.5 rounded-2xl bg-[#09090C]/80 border border-white/[0.07] text-xs text-[#F4F0E8]/80 flex items-start gap-2.5 leading-relaxed">
             <ShieldCheck className="w-4 h-4 text-[#C8A66A] shrink-0 mt-0.5" />
             <span>
               {content.provenance?.verifiedHistoricalFact
@@ -341,21 +353,21 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
             </span>
           </div>
 
-          <dl className="space-y-3 text-xs">
-            <div>
+          <dl className="divide-y divide-white/[0.07] text-xs">
+            <div className="py-2.5">
               <dt className="text-[#F4F0E8]/50">Krahina / Origjina</dt>
               <dd className="text-[#F4F0E8] font-medium mt-0.5">
                 {content.provenance?.regionOfOrigin || content.region || 'Shqipëri'}
               </dd>
             </div>
-            <div>
+            <div className="py-2.5">
               <dt className="text-[#F4F0E8]/50">Dialekti / Gjuha</dt>
               <dd className="text-[#F4F0E8] font-medium mt-0.5">
                 {content.provenance?.dialect || content.language || 'Shqip'}
               </dd>
             </div>
             {content.provenance?.storyteller && (
-              <div>
+              <div className="py-2.5">
                 <dt className="text-[#F4F0E8]/50">Rrëfimtari / Kontribuesi</dt>
                 <dd className="text-[#F4F0E8] font-medium mt-0.5">
                   {content.provenance.storyteller}
@@ -363,14 +375,14 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
               </div>
             )}
             {content.provenance?.sourceReferences && (
-              <div>
+              <div className="py-2.5">
                 <dt className="text-[#F4F0E8]/50">Burimet & Bibliografia</dt>
                 <dd className="text-[#F4F0E8] font-medium mt-0.5">
                   {content.provenance.sourceReferences}
                 </dd>
               </div>
             )}
-            <div>
+            <div className="py-2.5">
               <dt className="text-[#F4F0E8]/50">Të Drejtat & Licenca</dt>
               <dd className="text-[#F4F0E8] font-medium mt-0.5">
                 {content.provenance?.rightsAndLicensing || 'MITO Heritage Archive'}
@@ -379,14 +391,16 @@ export const ContentDetailsView: React.FC<ContentDetailsViewProps> = ({
           </dl>
 
           {relatedStories.length > 0 && (
-            <div className="pt-4 border-t border-[#202024] space-y-2.5">
-              <h3 className="text-xs font-semibold text-[#C8A66A]">Rrëfime të Ngjashme</h3>
+            <div className="pt-4 border-t border-white/[0.08] space-y-2.5">
+              <h3 className="text-[11px] font-mono-code uppercase tracking-wider text-[#C8A66A]">
+                Rrëfime të Ngjashme
+              </h3>
               {relatedStories.map((rel) => (
                 <button
                   key={rel.contentId}
                   type="button"
                   onClick={() => onNavigate(`/content/${rel.contentId}`)}
-                  className="w-full text-left p-2.5 rounded-lg bg-[#0B0B0D] hover:bg-[#202024] text-xs text-[#F4F0E8] transition-colors cursor-pointer"
+                  className="w-full text-left p-2.5 rounded-xl bg-[#09090C]/80 hover:bg-white/[0.06] text-xs text-[#F4F0E8] transition-colors cursor-pointer"
                 >
                   {rel.title}
                 </button>

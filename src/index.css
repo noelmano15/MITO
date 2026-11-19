@@ -2,14 +2,17 @@
 
 @layer base {
   :root {
-    --mito-black: #0B0B0D;
+    --mito-black: #09090C;
+    --mito-surface: #111116;
+    --mito-surface-elevated: #17171E;
     --mito-burgundy: #641C2B;
     --mito-burgundy-light: #822438;
     --mito-gold: #C8A66A;
-    --mito-gold-light: #DEC089;
+    --mito-gold-light: #E4C88E;
     --mito-ivory: #F4F0E8;
-    --mito-graphite: #202024;
-    --mito-surface: #141418;
+    --mito-graphite: #22222A;
+    --mito-hairline: rgba(255, 255, 255, 0.08);
+    --mito-gold-hairline: rgba(200, 166, 106, 0.28);
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
@@ -24,10 +27,11 @@
     width: 100%;
     margin: 0;
     padding: 0;
-    background-color: #0B0B0D;
+    background-color: #09090C;
     color: #F4F0E8;
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
   }
@@ -37,15 +41,19 @@
     text-wrap: balance;
   }
 
+  .font-editorial {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+
   .font-mono-code {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
 }
 
-/* iPhone 17 / Dynamic Island & Home Indicator Safe-Area Helpers */
+/* Safe-Area Helpers for Modern Mobile Viewports */
 .safe-top-header {
-  padding-top: max(env(safe-area-inset-top, 0px), 10px);
+  padding-top: max(env(safe-area-inset-top, 0px), 6px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
 }
@@ -55,22 +63,22 @@
 }
 
 .safe-bottom-nav {
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
 }
 
 .safe-main-content {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5rem);
 }
 
 @media (min-width: 768px) {
   .safe-main-content {
-    padding-bottom: 3rem;
+    padding-bottom: 3.5rem;
   }
 }
 
-/* Hide scrollbars on horizontal filter pill rows */
+/* Hide scrollbars cleanly */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -79,17 +87,224 @@
   scrollbar-width: none;
 }
 
-/* Subtle Albanian traditional geometric motif border */
+/* Heritage Hairline Divider */
 .heritage-divider {
   height: 1px;
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(200, 166, 106, 0.25) 20%,
-    rgba(200, 166, 106, 0.65) 50%,
-    rgba(200, 166, 106, 0.25) 80%,
+    rgba(200, 166, 106, 0.22) 20%,
+    rgba(200, 166, 106, 0.6) 50%,
+    rgba(200, 166, 106, 0.22) 80%,
     transparent 100%
   );
+}
+
+/* Luxury Glass & Specular Surface Utilities */
+.mito-surface-card {
+  background: linear-gradient(180deg, rgba(23, 23, 30, 0.92) 0%, rgba(15, 15, 20, 0.96) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 40px -18px rgba(0, 0, 0, 0.78);
+}
+
+.mito-surface-gold {
+  background: linear-gradient(165deg, rgba(24, 21, 25, 0.95) 0%, rgba(14, 14, 18, 0.98) 100%);
+  border: 1px solid rgba(200, 166, 106, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(228, 200, 142, 0.14),
+    0 24px 60px -20px rgba(0, 0, 0, 0.85),
+    0 0 40px -20px rgba(100, 28, 43, 0.55);
+}
+
+/* =====================================================
+   GPU-COMPOSITED CINEMATIC ANIMATIONS (Transform & Opacity Only)
+   ===================================================== */
+
+@keyframes mitoFadeUp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes mitoFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes mitoKenBurns {
+  0% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.08) translate3d(-1.2%, -0.8%, 0);
+  }
+  100% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes mitoAuraDrift {
+  0% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(4%, 3%, 0) scale(1.07);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+    opacity: 0.55;
+  }
+}
+
+@keyframes mitoShimmerSweep {
+  0% {
+    transform: translate3d(-140%, 0, 0) skewX(-20deg);
+  }
+  100% {
+    transform: translate3d(240%, 0, 0) skewX(-20deg);
+  }
+}
+
+@keyframes mitoRingFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0) rotate(1.5deg);
+  }
+}
+
+.mito-reveal {
+  animation: mitoFadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mito-reveal-delay-1 {
+  animation: mitoFadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
+}
+
+.mito-reveal-delay-2 {
+  animation: mitoFadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+}
+
+.mito-reveal-delay-3 {
+  animation: mitoFadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) 270ms both;
+}
+
+.mito-reveal-delay-4 {
+  animation: mitoFadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) 360ms both;
+}
+
+.mito-fade-in {
+  animation: mitoFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mito-ken-burns {
+  animation: mitoKenBurns 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+.mito-aura-drift {
+  animation: mitoAuraDrift 16s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.mito-float-subtle {
+  animation: mitoRingFloat 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Tactile GPU-composited card hover lift */
+.mito-card-hover {
+  transition:
+    transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.32s ease,
+    box-shadow 0.38s ease;
+  will-change: transform;
+}
+
+.mito-card-hover:hover {
+  transform: translate3d(0, -4px, 0);
+  border-color: rgba(200, 166, 106, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(228, 200, 142, 0.14),
+    0 24px 48px -18px rgba(0, 0, 0, 0.85),
+    0 0 28px -12px rgba(200, 166, 106, 0.22);
+}
+
+/* Primary CTA Button Shimmer Sweep (transform only) */
+.mito-cta-primary {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.24s ease,
+    border-color 0.24s ease,
+    box-shadow 0.28s ease;
+}
+
+.mito-cta-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(228, 200, 142, 0.26) 50%,
+    transparent 100%
+  );
+  transform: translate3d(-140%, 0, 0) skewX(-20deg);
+  pointer-events: none;
+}
+
+.mito-cta-primary:hover::after {
+  animation: mitoShimmerSweep 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mito-cta-primary:hover {
+  transform: translate3d(0, -1px, 0);
+  box-shadow: 0 12px 28px -10px rgba(100, 28, 43, 0.8), 0 0 20px -8px rgba(200, 166, 106, 0.38);
+}
+
+.mito-cta-primary:active {
+  transform: translate3d(0, 1px, 0) scale(0.985);
+}
+
+/* Accessibility: Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .mito-reveal,
+  .mito-reveal-delay-1,
+  .mito-reveal-delay-2,
+  .mito-reveal-delay-3,
+  .mito-reveal-delay-4,
+  .mito-fade-in,
+  .mito-ken-burns,
+  .mito-aura-drift,
+  .mito-float-subtle {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .mito-card-hover,
+  .mito-cta-primary {
+    transition: none !important;
+  }
+  .mito-cta-primary:hover::after {
+    animation: none !important;
+  }
 }
 
 /* Custom subtle scrollbars */
@@ -98,10 +313,10 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0B0B0D;
+  background: #09090C;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2C2C32;
+  background: #282830;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {

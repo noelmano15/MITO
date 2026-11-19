@@ -1047,6 +1047,23 @@ async function ensurePlayableVideoOnDisk(
     return attachedBesaFullFilm;
   }
 
+  const isPromoShort =
+    asset.assetId === 'media_mito_promo_short_916' ||
+    relatedContent?.contentId === 'cnt_mito_promo_short_916' ||
+    Boolean(relatedContent?.title?.toLowerCase().includes('promocionale')) ||
+    Boolean(asset.filename?.toLowerCase().includes('promocionale'));
+
+  const attachedPromoShort = path.join(
+    process.cwd(),
+    'public/assets/aistudio/gemini_generated_video_1795373B_b448962d.mp4'
+  );
+
+  if (isPromoShort && fs.existsSync(attachedPromoShort)) {
+    asset.fileSizeBytes = fs.statSync(attachedPromoShort).size;
+    asset.durationSeconds = 10;
+    return attachedPromoShort;
+  }
+
   // If this is a Google Drive video and we have a Drive OAuth token, try downloading the exact file from Drive if not yet downloaded
   const db = store.getState();
   const driveFileId = asset.driveFileId || relatedContent?.driveVideoFileId;
@@ -1671,6 +1688,155 @@ async function startServer() {
       }
     }
 
+    // Ensure the promotional short video ("MITO fushatë promocionale") is present in the shorts category
+    let promoShortContent = db.content.find(
+      (c) =>
+        c.contentId === 'cnt_mito_promo_short_916' ||
+        c.title.toLowerCase().includes('fushatë promocionale') ||
+        c.title.toLowerCase().includes('fushate promocionale')
+    );
+
+    const promoShortCoverUrl = '/assets/aistudio/mito_promo_short_cover.jpg';
+    const promoAssetId = 'media_mito_promo_short_916';
+    const promoStorageFilename = 'media_mito_promo_short_916_gemini_generated_video_1795373B_b448962d.mp4';
+    const promoDuration = 10;
+    const attachedPromoPath = path.join(
+      process.cwd(),
+      'public/assets/aistudio/gemini_generated_video_1795373B_b448962d.mp4'
+    );
+    const promoFileSize = fs.existsSync(attachedPromoPath)
+      ? fs.statSync(attachedPromoPath).size
+      : 4847313;
+
+    store.unmarkDeleted(['cnt_mito_promo_short_916', promoAssetId]);
+
+    if (!db.mediaAssets.some((a) => a.assetId === promoAssetId)) {
+      db.mediaAssets.push({
+        assetId: promoAssetId,
+        filename: 'gemini_generated_video_1795373B_b448962d.mp4',
+        mimeType: 'video/mp4',
+        fileSizeBytes: promoFileSize,
+        videoFormat: 'short',
+        width: 720,
+        height: 1280,
+        aspectRatio: 0.5625,
+        durationSeconds: promoDuration,
+        resolution: '720x1280',
+        codec: 'H.264 (avc1)',
+        audioCodec: 'AAC (mp4a)',
+        storagePath: `/uploads/${promoStorageFilename}`,
+        publicUrl: `/assets/aistudio/gemini_generated_video_1795373B_b448962d.mp4`,
+        processingStatus: 'ready',
+        uploadStatus: 'ready',
+        relatedContentId: 'cnt_mito_promo_short_916',
+        driveFolderId: DEFAULT_GOOGLE_DRIVE_FOLDER_ID,
+        uploadedByUid: 'admin_mito_primary',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+      mutated = true;
+    }
+
+    if (!promoShortContent) {
+      promoShortContent = {
+        contentId: 'cnt_mito_promo_short_916',
+        title: 'MITO fushatë promocionale',
+        slug: 'mito-fushate-promocionale',
+        synopsis:
+          'Video promocionale zyrtare e platformës MITO — Legjenda, Histori, Lojëra & Transmetim Kulturor në format vertikal 9:16.',
+        description:
+          'Fushata promocionale zyrtare për platformën MITO. Prezantimi i kinematografisë shqiptare, filmit BESA, kuizeve interaktive dhe mbështetjes inteligjente MITO.',
+        type: 'legend',
+        videoFormat: 'short',
+        videoContainer: 'mp4',
+        aspectRatio: 0.5625,
+        width: 720,
+        height: 1280,
+        durationSeconds: promoDuration,
+        resolution: '720x1280',
+        codec: 'H.264 (avc1)',
+        audioCodec: 'AAC (mp4a)',
+        fileSizeBytes: promoFileSize,
+        storagePath: `/uploads/${promoStorageFilename}`,
+        thumbnailUrl: promoShortCoverUrl,
+        posterUrl: promoShortCoverUrl,
+        heroUrl: promoShortCoverUrl,
+        playbackUrl: `/assets/aistudio/gemini_generated_video_1795373B_b448962d.mp4`,
+        processingStatus: 'ready',
+        uploadStatus: 'ready',
+        captions: [],
+        publicationStatus: 'published',
+        relatedStoryIds: [],
+        relatedGameIds: [],
+        categoryIds: [db.categories[0]?.categoryId || 'cat_legjenda'],
+        tags: ['mito', 'shorts', 'promo', 'fushatë promocionale', 'vertikale'],
+        language: 'Shqip',
+        region: 'Shqipëri',
+        featured: false,
+        cropMode: 'preserve',
+        creatorAttribution: 'MITO Platform',
+        watchToUnlock: {
+          enabled: false,
+          requiredCompletionPercent: 0,
+          mandatoryForAllGames: false,
+        },
+        provenance: {
+          sourceReferences: 'MITO Official Promotional Campaign (9:16 Vertical Short)',
+          bibliography: 'MITO Promo Campaign',
+          storyteller: 'MITO',
+          regionOfOrigin: 'Shqipëri',
+          dialect: 'Standarde',
+          recordingDate: nowIso.slice(0, 10),
+          consentStatus: 'verified',
+          rightsAndLicensing: 'MITO Platform Copyright',
+          editorialNotes: 'Fushatë promocionale zyrtare e platformës MITO.',
+          verifiedHistoricalFact: true,
+        },
+        viewsCount: 1,
+        likesCount: 1,
+        savesCount: 1,
+        totalWatchDurationSeconds: 10,
+        completionCount: 1,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        publishedAt: nowIso,
+        driveFolderId: DEFAULT_GOOGLE_DRIVE_FOLDER_ID,
+        driveFolderUrl: DEFAULT_GOOGLE_DRIVE_FOLDER_URL,
+        lastDriveSyncAt: nowIso,
+      };
+      db.content.push(promoShortContent);
+      mutated = true;
+    } else {
+      let contentMutated = false;
+      if (promoShortContent.title !== 'MITO fushatë promocionale') {
+        promoShortContent.title = 'MITO fushatë promocionale';
+        contentMutated = true;
+      }
+      if (promoShortContent.videoFormat !== 'short') {
+        promoShortContent.videoFormat = 'short';
+        contentMutated = true;
+      }
+      if (promoShortContent.publicationStatus !== 'published') {
+        promoShortContent.publicationStatus = 'published';
+        contentMutated = true;
+      }
+      if (promoShortContent.thumbnailUrl !== promoShortCoverUrl) {
+        promoShortContent.thumbnailUrl = promoShortCoverUrl;
+        promoShortContent.posterUrl = promoShortCoverUrl;
+        promoShortContent.heroUrl = promoShortCoverUrl;
+        contentMutated = true;
+      }
+      if (
+        promoShortContent.playbackUrl !==
+        '/assets/aistudio/gemini_generated_video_1795373B_b448962d.mp4'
+      ) {
+        promoShortContent.playbackUrl =
+          '/assets/aistudio/gemini_generated_video_1795373B_b448962d.mp4';
+        contentMutated = true;
+      }
+      if (contentMutated) mutated = true;
+    }
+
     // Ensure every content item is linked to the Google Drive folder & has 0% watch requirement
     for (const c of db.content) {
       if (!c.driveFolderId) {
@@ -2160,6 +2326,16 @@ async function startServer() {
       const besaCoverPath = path.join(process.cwd(), 'public/assets/aistudio/BesaCover_3b623702.jpg');
       if (fs.existsSync(besaCoverPath)) {
         res.sendFile(besaCoverPath);
+        return;
+      }
+    }
+    if (
+      contentId === 'cnt_mito_promo_short_916' ||
+      item?.title?.toLowerCase().includes('promocionale')
+    ) {
+      const promoCoverPath = path.join(process.cwd(), 'public/assets/aistudio/mito_promo_short_cover.jpg');
+      if (fs.existsSync(promoCoverPath)) {
+        res.sendFile(promoCoverPath);
         return;
       }
     }
@@ -6119,7 +6295,12 @@ ${platformContext}`;
   // 8. VITE DEV MIDDLEWARE / PRODUCTION STATIC SERVING
   // =========================================================
 
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`MITO Full-Stack Platform running on http://0.0.0.0:${PORT}`);
+  });
+
   if (process.env.NODE_ENV !== 'production') {
+    app.use(express.static(path.join(process.cwd(), 'public')));
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -6132,10 +6313,6 @@ ${platformContext}`;
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`MITO Full-Stack Platform running on http://0.0.0.0:${PORT}`);
-  });
 }
 
 startServer();

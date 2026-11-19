@@ -191,9 +191,9 @@ export const MultiplayerHostView: React.FC<MultiplayerHostViewProps> = ({
 
       {/* LOBBY STATE */}
       {room.status === 'lobby' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mito-reveal">
           {/* QR Code & Room Code Display */}
-          <div className="p-8 rounded-2xl bg-[#141418] border border-[#C8A66A]/40 text-center space-y-6">
+          <div className="p-8 rounded-3xl mito-surface-gold text-center space-y-6">
             <h2 className="text-2xl font-serif-heritage font-bold text-[#F4F0E8]">
               Luaj me Miqtë!
             </h2>
@@ -207,17 +207,17 @@ export const MultiplayerHostView: React.FC<MultiplayerHostViewProps> = ({
                 <img
                   src={qrCodeDataUrl}
                   alt={`QR Code për dhomën ${room.roomCode}`}
-                  className="w-44 h-44 rounded-xl border-4 border-[#C8A66A] bg-[#F4F0E8] p-1"
+                  className="w-44 h-44 rounded-2xl border-4 border-[#C8A66A] bg-[#F4F0E8] p-1"
                 />
               ) : (
-                <div className="w-44 h-44 rounded-xl border border-[#C8A66A] flex items-center justify-center">
+                <div className="w-44 h-44 rounded-2xl border border-[#C8A66A] flex items-center justify-center">
                   <QrCode className="w-12 h-12 text-[#C8A66A]" />
                 </div>
               )}
 
               <div className="space-y-2">
-                <div className="text-xs text-[#C8A66A] tracking-widest">KODI I LOJËS</div>
-                <div className="px-6 py-4 rounded-2xl bg-[#0B0B0D] border-2 border-[#C8A66A] font-mono-code text-4xl font-bold tracking-[0.22em] text-[#F4F0E8]">
+                <div className="text-xs font-mono-code text-[#C8A66A] tracking-widest">KODI I LOJËS</div>
+                <div className="px-6 py-4 rounded-2xl bg-[#09090C] border-2 border-[#C8A66A] font-mono-code text-4xl font-bold tracking-[0.22em] text-[#F4F0E8]">
                   {room.roomCode}
                 </div>
                 <p className="text-[11px] text-[#F4F0E8]/55 font-mono-code truncate max-w-[220px]">
@@ -228,7 +228,7 @@ export const MultiplayerHostView: React.FC<MultiplayerHostViewProps> = ({
           </div>
 
           {/* Connected Players Lobby */}
-          <div className="p-8 rounded-2xl bg-[#141418] border border-[#202024] space-y-6">
+          <div className="p-8 rounded-3xl mito-surface-card space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-serif-heritage font-bold text-[#F4F0E8] flex items-center gap-2">
                 <Users className="w-5 h-5 text-[#C8A66A]" />
@@ -470,20 +470,27 @@ export const MobileControllerView: React.FC<MobileControllerViewProps> = ({
   // Join Form before entering controller
   if (!player || !room) {
     return (
-      <div className="min-h-screen bg-[#0B0B0D] text-[#F4F0E8] flex flex-col justify-between p-5">
-        <header className="flex items-center justify-between">
+      <div className="min-h-screen bg-[#09090C] text-[#F4F0E8] flex flex-col justify-between p-5 relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0 mito-aura-drift"
+          style={{
+            background:
+              'radial-gradient(circle at 50% 25%, rgba(100,28,43,0.28) 0%, transparent 65%)',
+          }}
+        />
+        <header className="relative z-10 flex items-center justify-between">
           <BrandLogo variant="compact" size="sm" />
           <button
             type="button"
             onClick={() => onNavigate('/login')}
-            className="text-xs text-[#C8A66A] hover:underline cursor-pointer"
+            className="min-h-[40px] px-3 text-xs text-[#C8A66A] hover:underline cursor-pointer"
           >
             Kthehu
           </button>
         </header>
 
-        <div className="max-w-sm w-full mx-auto bg-[#141418] border border-[#C8A66A]/35 rounded-2xl p-6 space-y-5">
-          <div className="text-center space-y-1">
+        <div className="relative z-10 max-w-sm w-full mx-auto mito-surface-gold rounded-3xl p-6 sm:p-7 space-y-5 mito-reveal">
+          <div className="text-center space-y-1.5">
             <Smartphone className="w-8 h-8 text-[#C8A66A] mx-auto" />
             <h1 className="text-xl font-serif-heritage font-bold text-[#F4F0E8]">
               Kontrolleri i Telefonit MITO
